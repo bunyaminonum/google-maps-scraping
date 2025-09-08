@@ -23,6 +23,7 @@ import pytz
 
 # Database sınıfını import et
 from database_test import ReviewsDatabase
+from turkish_time_parser import TurkishTimeParser
 
 @dataclass
 class Review:
@@ -30,6 +31,8 @@ class Review:
     review_text: str
     rating: str
     date: str
+    timestamp: Optional[datetime] = None
+    time_category: str = "today"
     is_new: bool = False
     platform: str = "Google Maps"
 
@@ -44,6 +47,9 @@ class DatabaseGoogleMapsScraper:
         
         # Veritabanı bağlantısı
         self.db = ReviewsDatabase(db_path)
+        
+        # Türkçe zaman parser'ı
+        self.time_parser = TurkishTimeParser()
         
         # İstatistikler
         self.scraped_count = 0
@@ -576,12 +582,19 @@ class DatabaseGoogleMapsScraper:
                         total_ratings_count += 1
                         print(f"   📈 Puanlama eklendi: {rating} yıldız")
                     
-                    # Tarih
+                    # Tarih ve timestamp
                     try:
                         date_element = container.find_element(By.CSS_SELECTOR, ".rsqaWe")
                         date_text = date_element.text.strip()
+                        
+                        # Türkçe zaman ifadesini timestamp'e çevir
+                        timestamp, time_category = self.time_parser.parse_turkish_time(date_text)
+                        print(f"   📅 Tarih: {date_text} → {timestamp.strftime('%Y-%m-%d %H:%M')} ({time_category})")
+                        
                     except:
                         date_text = "Tarih bilinmiyor"
+                        timestamp = datetime.now(self.time_parser.timezone)
+                        time_category = "today"
                     
                     # Yorum metni - SON HALİ: DAHA FAZLA GENİŞLETME
                     try:
@@ -613,12 +626,14 @@ class DatabaseGoogleMapsScraper:
                     except:
                         review_text = ""
                     
-                    # Review objesi oluştur
+                    # Review objesi oluştur - timestamp ile
                     review = Review(
                         reviewer_name=reviewer_name,
                         review_text=review_text,
                         rating=str(rating) if rating > 0 else "0",
                         date=date_text,
+                        timestamp=timestamp,
+                        time_category=time_category,
                         is_new=True
                     )
                     
@@ -671,6 +686,8 @@ class DatabaseGoogleMapsScraper:
                         'review_text': review.review_text,
                         'rating': review.rating,
                         'review_date': review.date,
+                        'timestamp_parsed': review.timestamp.isoformat() if review.timestamp else None,
+                        'time_category': review.time_category,
                         'scrape_date': datetime.now().isoformat(),
                         'platform': review.platform,
                         'is_new': review.is_new
