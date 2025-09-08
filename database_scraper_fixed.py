@@ -772,7 +772,7 @@ if __name__ == "__main__":
     
     # Varsayılan değerler
     default_business = "İstanbul Sabiha Gökçen Uluslararası Havalimanı"
-    default_url = "https://www.google.com/maps/place/%C4%B0stanbul+Sabiha+G%C3%B6k%C3%A7en+Uluslararas%C4%B1+Havaliman%C4%B1/@40.9066532,29.3107929,16z/data=!4m8!3m7!1s0x14cadbcbf424a153:0xacefca4d8098da74!8m2!3d40.8944747!4d29.3130928!9m1!1b1!16zL20vMDJnbmhx?entry=ttu&g_ep=EgoyMDI1MDkwMy4wIKXMDSoASAFQAw%3D%3D"
+    default_url = "https://www.google.com/maps/place/%C4%B0stanbul+Sabiha+G%C3%B6k%C3%A7en+Uluslararas%C4%B1+Havaliman%C4%B1/@40.8977044,29.3079693,17z/data=!3m1!4b1!4m6!3m5!1s0x14caddbd3b69b9b5:0xe81e6c8c3b6b8a87!8m2!3d40.8977044!4d29.3105442!16zL20vMGM4Y20w?entry=ttu&g_ep=EgoyMDI0MDkwNC4wIKXMDSoASAFQAw%3D%3D"
     
     with st.form("scraper_form"):
         col1, col2 = st.columns(2)

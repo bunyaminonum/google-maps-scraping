@@ -85,6 +85,52 @@ class ReviewsDatabase:
         conn.close()
         print(f"✅ Scrape session kaydedildi: {session_data['session_id']}")
     
+    def add_session(self, session_data):
+        """Session ekleme (scraper uyumluluk için)"""
+        self.save_scrape_session(session_data)
+    
+    def add_review(self, review_data):
+        """Tek yorum ekleme (scraper uyumluluk için)"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            # Rating değerini integer'a dönüştür
+            rating_value = review_data.get('rating')
+            if rating_value is not None:
+                try:
+                    rating_value = int(float(str(rating_value)))
+                except (ValueError, TypeError):
+                    rating_value = 0
+            else:
+                rating_value = 0
+            
+            cursor.execute('''
+            INSERT INTO reviews 
+            (business_name, business_url, reviewer_name, rating, date_original,
+             review_text, timestamp_parsed, time_category, scrape_session_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                review_data.get('business_name', ''),
+                review_data.get('business_url', ''),
+                review_data.get('reviewer_name', ''),
+                rating_value,
+                review_data.get('review_date', ''),
+                review_data.get('review_text', ''),
+                review_data.get('timestamp_parsed'),
+                review_data.get('time_category', ''),
+                review_data.get('session_id', '')
+            ))
+            
+            conn.commit()
+            conn.close()
+            return True
+            
+        except Exception as e:
+            print(f"❌ Yorum kaydetme hatası: {e}")
+            conn.close()
+            return False
+    
     def save_reviews(self, reviews_data, session_id):
         """Yorumları veritabanına kaydet"""
         if not reviews_data:

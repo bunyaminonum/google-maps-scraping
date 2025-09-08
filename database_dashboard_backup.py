@@ -1,6 +1,9 @@
 """
 🎯 Google Maps Yorumları - Veritabanı Entegrasyonlu Dashboard
-Veritabanından veri çekme ile geliştirilmiş analiz arayüzü
+def load_data_from_database(db_path="reviews.db"):
+    """Veritabanından tüm yorumları yükle"""
+    try:
+        db = ReviewsDatabase(db_path)te veritabanından veri çekme ile geliştirilmiş analiz arayüzü
 """
 
 import streamlit as st
@@ -66,7 +69,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def load_data_from_database(db_path="reviews.db"):
+def load_data_from_database(db_path="main_reviews.db"):
     """Veritabanından tüm verileri yükle"""
     try:
         db = ReviewsDatabase(db_path)
@@ -183,27 +186,23 @@ def run_new_scraper():
                 return False
             
             # Scraper'ı başlat
-            scraper = DatabaseGoogleMapsScraper(headless=True, db_path="reviews.db")
+            scraper = DatabaseGoogleMapsScraper(headless=True, db_path="main_reviews.db")
             
             # Veri topla
-            result = scraper.extract_reviews_with_database(
+            result = scraper.scrape_business_reviews(
                 business_name=business_name,
                 business_url=business_url,
-                target_text_reviews=text_reviews,
-                target_ratings=total_reviews
+                text_reviews_target=text_reviews,
+                total_ratings_target=total_reviews
             )
             
-            if result and result.get("success", False):
-                total_reviews = result.get("total_reviews", 0)
-                text_reviews = result.get("text_reviews", 0)
-                st.success(f"✅ Veriler başarıyla veritabanına kaydedildi!")
-                st.info(f"📊 Toplam: {total_reviews} yorum, Metin: {text_reviews} yorum")
+            if result:
+                st.success("✅ Veriler başarıyla veritabanına kaydedildi!")
                 # Sayfayı yenile
                 st.rerun()
                 return True
             else:
-                error_msg = result.get("error", "Bilinmeyen hata") if result else "İşlem başarısız"
-                st.error(f"❌ Veri toplama işlemi başarısız: {error_msg}")
+                st.error("❌ Veri toplama işlemi başarısız!")
                 return False
                 
         except Exception as e:
@@ -612,7 +611,7 @@ def main():
                 ax.axis('off')
                 ax.set_title('En Sık Kullanılan Kelimeler', fontsize=16, pad=20)
                 
-                st.pyplot(fig, clear_figure=True)
+                st.pyplot(fig, key="wordcloud_main")
                 
                 # En sık kullanılan kelimeler
                 words = all_text.lower().split()
