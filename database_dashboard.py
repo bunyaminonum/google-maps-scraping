@@ -18,6 +18,9 @@ import sqlite3
 from database_test import ReviewsDatabase
 from database_scraper import DatabaseGoogleMapsScraper
 import pytz
+import os
+from dotenv import load_dotenv
+from google import genai
 
 # Page configuration
 st.set_page_config(
@@ -85,6 +88,77 @@ def load_data_from_database(db_path="reviews.db"):
     except Exception as e:
         st.error(f"❌ Error loading database: {str(e)}")
         return None, None
+
+def analyze_reviews_with_ai(reviews_text, business_name, time_period):
+    """Analyze reviews using Gemini AI"""
+    try:
+        # Load API key
+        load_dotenv()
+        api_key = os.getenv('GEMINI_API_KEY')
+        
+        if not api_key:
+            return {
+                "error": "GEMINI_API_KEY not found. Please configure .env file.",
+                "success": False
+            }
+        
+        # Initialize Gemini client
+        client = genai.Client(api_key=api_key)
+        
+        # Create analysis prompt
+        prompt = f"""
+You are analyzing customer reviews for: {business_name}
+Time period: {time_period}
+Number of reviews: {len(reviews_text)} reviews
+
+Reviews to analyze:
+{chr(10).join(reviews_text[:50])}  # Analyze first 50 reviews
+
+Please provide a comprehensive analysis in the following format:
+
+1. **Overall Sentiment**
+   - Positive/Negative/Mixed percentage breakdown
+   - General mood of customers
+
+2. **Key Themes** (Top 5-7 themes mentioned)
+   - List the most frequently mentioned topics
+   - For each theme, indicate if it's positive or negative
+
+3. **Strengths** (Top 3-5)
+   - What customers love most
+   - Most praised aspects
+
+4. **Areas for Improvement** (Top 3-5)
+   - Common complaints
+   - Issues that need attention
+
+5. **Customer Insights**
+   - Patterns in customer behavior
+   - Recommendations based on feedback
+
+6. **Summary**
+   - Brief executive summary (2-3 sentences)
+
+Please provide the analysis in clear, structured format with bullet points.
+"""
+        
+        # Generate analysis
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-exp",
+            contents=prompt
+        )
+        
+        return {
+            "success": True,
+            "analysis": response.text,
+            "reviews_count": len(reviews_text)
+        }
+        
+    except Exception as e:
+        return {
+            "error": str(e),
+            "success": False
+        }
 
 def parse_relative_time_to_timestamp(relative_time_str):
     """Convert Turkish relative time expressions to timestamp"""
@@ -344,7 +418,7 @@ def main():
     st.markdown("---")
     
     # Tab structure
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "📈 Time Analysis", "💬 Review Details", "☁️ WordCloud"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Overview", "📈 Time Analysis", "💬 Review Details", "☁️ WordCloud", "🤖 AI Analysis"])
     
     with tab1:
         st.markdown("## 📊 Overview")
@@ -639,6 +713,121 @@ def main():
         
         else:
             st.warning("⚠️ Not enough text reviews for WordCloud.")
+    
+    with tab5:
+        st.markdown("## 🤖 AI Analysis with Gemini")
+        
+        st.info("💡 Use AI to get deep insights from customer reviews")
+        
+        # Analysis configuration
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Business selection for AI
+            businesses_for_ai = ['All'] + sorted(df['business_name'].unique().tolist())
+            selected_business_ai = st.selectbox(
+                "Select Business for AI Analysis",
+                businesses_for_ai,
+                key="ai_business_select"
+            )
+        
+        with col2:
+            # Time period selection
+            time_filter_ai = st.selectbox(
+                "Select Time Period",
+                ['All', 'Today', 'Yesterday', 'This Week', 'This Month', 'Older'],
+                key="ai_time_select"
+            )
+        
+        # Filter data for AI analysis
+        ai_df = df.copy()
+        
+        if selected_business_ai != 'All':
+            ai_df = ai_df[ai_df['business_name'] == selected_business_ai]
+        
+        if time_filter_ai != 'All':
+            ai_df = ai_df[ai_df['time_category'] == time_filter_ai]
+        
+        # Get text reviews
+        text_reviews_ai = ai_df[ai_df['review_text'].notna() & (ai_df['review_text'] != '')]['review_text'].tolist()
+        
+        st.markdown("---")
+        
+        # Show selection summary
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Business", selected_business_ai)
+        
+        with col2:
+            st.metric("Time Period", time_filter_ai)
+        
+        with col3:
+            st.metric("Text Reviews", len(text_reviews_ai))
+        
+        st.markdown("---")
+        
+        # Analyze button
+        if len(text_reviews_ai) > 0:
+            if st.button("🚀 Analyze with AI", type="primary", key="analyze_button"):
+                with st.spinner("🤖 AI is analyzing reviews... This may take a few seconds..."):
+                    # Perform AI analysis
+                    result = analyze_reviews_with_ai(
+                        text_reviews_ai,
+                        selected_business_ai,
+                        time_filter_ai
+                    )
+                    
+                    if result["success"]:
+                        st.success(f"✅ Analysis completed! Analyzed {result['reviews_count']} reviews")
+                        
+                        # Display analysis in a nice format
+                        st.markdown("### 📊 AI Analysis Results")
+                        
+                        # Analysis content
+                        st.markdown(f"""
+                        <div style="
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            padding: 20px;
+                            border-radius: 10px;
+                            color: white;
+                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                            margin: 20px 0;
+                        ">
+                            <h3 style="color: #FFE066; margin-top: 0;">
+                                🎯 Analysis for: {selected_business_ai}
+                            </h3>
+                            <p style="opacity: 0.9;">📅 Period: {time_filter_ai} | 💬 Reviews: {result['reviews_count']}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Display the analysis
+                        st.markdown(result["analysis"])
+                        
+                        # Download button for analysis
+                        st.download_button(
+                            label="📥 Download Analysis",
+                            data=result["analysis"],
+                            file_name=f"ai_analysis_{selected_business_ai}_{time_filter_ai}.txt",
+                            mime="text/plain"
+                        )
+                        
+                    else:
+                        st.error(f"❌ Analysis failed: {result.get('error', 'Unknown error')}")
+                        
+                        if "GEMINI_API_KEY" in result.get('error', ''):
+                            st.warning("""
+                            ⚠️ **Gemini API Key not configured**
+                            
+                            To use AI analysis:
+                            1. Get your free API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+                            2. Create a `.env` file in the project root
+                            3. Add: `GEMINI_API_KEY=your_api_key_here`
+                            4. Restart the dashboard
+                            """)
+        else:
+            st.warning("⚠️ No text reviews available for the selected filters. Please adjust your selection.")
+            st.info("💡 Try selecting 'All' for business and time period to see all available reviews.")
 
 if __name__ == "__main__":
     main()
