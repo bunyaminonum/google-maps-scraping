@@ -1,6 +1,6 @@
 """
-🎯 Google Maps Reviews - Database-Integrated Dashboard
-Advanced analysis interface with database data retrieval
+🎯 Google Maps Reviews - API-Powered Dashboard
+Real-time analysis with Google Maps Places API integration
 """
 
 import streamlit as st
@@ -16,16 +16,28 @@ from collections import Counter
 import numpy as np
 import sqlite3
 from database_test import ReviewsDatabase
-from database_scraper import DatabaseGoogleMapsScraper
+from api_pipeline.collectors.google_maps_api import GoogleMapsAPICollector
+from api_pipeline.config.settings import Config, BusinessConfig
 import pytz
 import os
 from dotenv import load_dotenv
-from google import genai
+
+# Gemini AI import (conditional - only if needed)
+GEMINI_AVAILABLE = False
+try:
+    from google import genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    try:
+        import google.generativeai as genai
+        GEMINI_AVAILABLE = True
+    except ImportError:
+        pass
 
 # Page configuration
 st.set_page_config(
-    page_title="🎯 Google Maps Reviews - DB Dashboard",
-    page_icon="💾",
+    page_title="🎯 Google Maps Reviews - API Dashboard",
+    page_icon="�",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -91,6 +103,12 @@ def load_data_from_database(db_path="reviews.db"):
 
 def analyze_reviews_with_ai(reviews_text, business_name, time_period):
     """Analyze reviews using Gemini AI"""
+    if not GEMINI_AVAILABLE:
+        return {
+            "error": "Gemini AI is not available. Please install: pip install google-generativeai",
+            "success": False
+        }
+    
     try:
         # Load API key
         load_dotenv()
@@ -102,8 +120,16 @@ def analyze_reviews_with_ai(reviews_text, business_name, time_period):
                 "success": False
             }
         
-        # Initialize Gemini client
-        client = genai.Client(api_key=api_key)
+        # Initialize Gemini client (support both import styles)
+        try:
+            # New API style
+            client = genai.Client(api_key=api_key)
+            model_name = "gemini-2.0-flash-exp"
+        except AttributeError:
+            # Old API style fallback
+            genai.configure(api_key=api_key)
+            client = genai
+            model_name = "gemini-1.5-flash"
         
         # Create analysis prompt
         prompt = f"""
@@ -142,15 +168,23 @@ Please provide a comprehensive analysis in the following format:
 Please provide the analysis in clear, structured format with bullet points.
 """
         
-        # Generate analysis
-        response = client.models.generate_content(
-            model="gemini-2.0-flash-exp",
-            contents=prompt
-        )
+        # Generate analysis (support both API styles)
+        try:
+            # New API style
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
+            analysis_text = response.text
+        except AttributeError:
+            # Old API style
+            model = client.GenerativeModel(model_name)
+            response = model.generate_content(prompt)
+            analysis_text = response.text
         
         return {
             "success": True,
-            "analysis": response.text,
+            "analysis": analysis_text,
             "reviews_count": len(reviews_text)
         }
         
@@ -242,46 +276,74 @@ def categorize_timestamp(timestamp):
     except:
         return "Time Unknown"
 
-def run_new_scraper():
-    """New data collection process"""
-    with st.spinner("🦊 Collecting new data..."):
+def run_api_collector():
+    """Collect data via Google Maps API"""
+    with st.spinner("🚀 Collecting data via Google Maps API..."):
         try:
-            # Get URL and parameters
-            business_url = st.session_state.get('business_url', '')
+            # Get Place ID and business name
+            place_id = st.session_state.get('place_id', '')
             business_name = st.session_state.get('business_name', '')
-            text_reviews = st.session_state.get('text_reviews', 5)
-            total_reviews = st.session_state.get('total_reviews', 10)
             
-            if not business_url or not business_name:
-                st.error("❌ Business name and URL are required!")
+            if not place_id or not business_name:
+                st.error("❌ Business name and Place ID are required!")
+                st.info("💡 Place ID example: ChIJqZW8Cvb_n0ARBuUkyCzgDDg")
                 return False
             
-            # Initialize scraper
-            scraper = DatabaseGoogleMapsScraper(headless=True, db_path="reviews.db")
+            # Initialize API collector
+            collector = GoogleMapsAPICollector()
             
-            # Collect data
-            result = scraper.extract_reviews_with_database(
-                business_name=business_name,
-                business_url=business_url,
-                target_text_reviews=text_reviews,
-                target_ratings=total_reviews
-            )
+            # Collect reviews
+            result = collector.collect_reviews(place_id, business_name)
             
             if result and result.get("success", False):
-                total_reviews = result.get("total_reviews", 0)
-                text_reviews = result.get("text_reviews", 0)
-                st.success(f"✅ Data successfully saved to database!")
-                st.info(f"📊 Total: {total_reviews} reviews, Text: {text_reviews} reviews")
+                reviews = result.get("reviews", [])
+                
+                # Save to database
+                db = ReviewsDatabase("reviews.db")
+                
+                new_count = 0
+                duplicate_count = 0
+                
+                for review in reviews:
+                    # Generate hash for duplicate check
+                    review_hash = db.generate_review_hash(
+                        business_name,
+                        review.author_name,
+                        review.relative_time,
+                        review.text or ""
+                    )
+                    
+                    # Check if exists
+                    if not db.check_review_exists(review_hash):
+                        # Add new review
+                        db.add_review(
+                            business_name=business_name,
+                            reviewer_name=review.author_name,
+                            rating=review.rating,
+                            review_text=review.text or "",
+                            date_original=review.relative_time,
+                            review_hash=review_hash
+                        )
+                        new_count += 1
+                    else:
+                        duplicate_count += 1
+                
+                st.success(f"✅ API collection completed!")
+                st.info(f"📊 Total: {len(reviews)} reviews fetched")
+                st.info(f"💾 New: {new_count} saved | ⏭️ Duplicates: {duplicate_count} skipped")
+                
                 # Refresh page
                 st.rerun()
                 return True
             else:
                 error_msg = result.get("error", "Unknown error") if result else "Operation failed"
-                st.error(f"❌ Data collection failed: {error_msg}")
+                st.error(f"❌ API collection failed: {error_msg}")
                 return False
                 
         except Exception as e:
             st.error(f"❌ Error: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
             return False
 
 def main():
@@ -290,8 +352,8 @@ def main():
     # Main header
     st.markdown("""
     <div class="main-header">
-        <h1>💾 Google Maps Reviews - Database Dashboard</h1>
-        <p>Real-time analysis from SQLite database</p>
+        <h1>� Google Maps Reviews - API Dashboard</h1>
+        <p>Real-time analysis powered by Google Maps Places API</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -322,30 +384,42 @@ def main():
         
         st.markdown("---")
         
-        # New data collection
-        st.markdown("### 🚀 Collect New Data")
+        # API data collection
+        st.markdown("### 🚀 Collect Data via API")
+        
+        st.info("💡 Using Google Maps Places API (fast & reliable)")
         
         business_name = st.text_input(
             "Business Name:",
-            value="Istanbul Sabiha Gokcen International Airport",
-            key="business_name"
+            value="İstanbul Havalimanı",
+            key="business_name",
+            help="Enter the business name for identification"
         )
         
-        business_url = st.text_area(
-            "Google Maps URL:",
-            value="https://www.google.com/maps/place/%C4%B0stanbul+Sabiha+G%C3%B6k%C3%A7en+Uluslararas%C4%B1+Havaliman%C4%B1/@40.9066374,29.3133253,17z/data=!4m8!3m7!1s0x14cadbcbf424a153:0xacefca4d8098da74!8m2!3d40.8944747!4d29.3130928!9m1!1b1!16zL20vMDJnbmhx?entry=ttu&g_ep=EgoyMDI1MDkwMy4wIKXMDSoASAFQAw%3D%3D",
-            height=100,
-            key="business_url"
+        place_id = st.text_input(
+            "Google Maps Place ID:",
+            value="ChIJqZW8Cvb_n0ARBuUkyCzgDDg",
+            key="place_id",
+            help="Enter the Place ID from Google Maps"
         )
         
-        col1, col2 = st.columns(2)
-        with col1:
-            text_reviews = st.number_input("Text Reviews:", min_value=1, max_value=50, value=5, key="text_reviews")
-        with col2:
-            total_reviews = st.number_input("Total Target:", min_value=1, max_value=100, value=10, key="total_reviews")
+        st.caption("📍 How to find Place ID: [Use Place ID Finder](https://developers.google.com/maps/documentation/places/web-service/place-id)")
         
-        if st.button("🦊 Collect Data", type="primary"):
-            run_new_scraper()
+        if st.button("🚀 Collect Latest Reviews", type="primary"):
+            run_api_collector()
+        
+        st.markdown("---")
+        
+        # Quick add from configured businesses
+        if BusinessConfig.BUSINESSES:
+            st.markdown("### ⚡ Quick Collect")
+            st.caption("Configured businesses:")
+            
+            for idx, (pid, bname) in enumerate(BusinessConfig.BUSINESSES):
+                if st.button(f"📍 {bname}", key=f"quick_{idx}"):
+                    st.session_state['place_id'] = pid
+                    st.session_state['business_name'] = bname
+                    run_api_collector()
         
         st.markdown("---")
         

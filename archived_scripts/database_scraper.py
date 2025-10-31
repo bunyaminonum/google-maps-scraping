@@ -626,6 +626,18 @@ class DatabaseGoogleMapsScraper:
                     except:
                         review_text = ""
                     
+                    # 🚀 DUPLICATE CHECK - Skip if review already exists
+                    review_hash = self.db.generate_review_hash(
+                        business_name,
+                        reviewer_name,
+                        date_text,
+                        review_text
+                    )
+                    
+                    if self.db.check_review_exists(review_hash):
+                        print(f"   ⏭️ Duplicate review skipped (already in database)")
+                        continue  # Skip this review
+                    
                     # Review objesi oluştur - timestamp ile
                     review = Review(
                         reviewer_name=reviewer_name,

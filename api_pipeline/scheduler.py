@@ -14,7 +14,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from api_pipeline.pipeline_manager import APIPipelineManager
-from api_pipeline.config.settings import Config
+from api_pipeline.config.settings import Config, BusinessConfig
 
 
 class SimpleScheduler:
@@ -64,7 +64,7 @@ class SimpleScheduler:
         print("="*70)
         print(f"📅 Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"⏱️  Interval: Every {self.interval_minutes} minutes")
-        print(f"📍 Businesses: {len(Config.BusinessConfig.BUSINESSES)}")
+        print(f"📍 Businesses: {len(BusinessConfig.BUSINESSES)}")
         print(f"🔄 Press Ctrl+C to stop")
         print("="*70 + "\n")
         

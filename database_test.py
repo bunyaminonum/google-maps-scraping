@@ -10,6 +10,7 @@ import pandas as pd
 from datetime import datetime, timezone
 import json
 import os
+import hashlib
 
 class ReviewsDatabase:
     def __init__(self, db_path="reviews.db"):
@@ -17,8 +18,40 @@ class ReviewsDatabase:
         self.db_path = db_path
         self.init_database()
     
+    @staticmethod
+    def generate_review_hash(business_name, reviewer_name, date_original, review_text):
+        """
+        Generate unique hash for review to prevent duplicates
+        Uses: business_name + reviewer_name + date + review_text
+        """
+        # Combine unique identifiers
+        unique_string = f"{business_name}|{reviewer_name}|{date_original}|{review_text}"
+        
+        # Create MD5 hash (fast and sufficient for this use case)
+        review_hash = hashlib.md5(unique_string.encode('utf-8')).hexdigest()
+        
+        return review_hash
+    
+    def check_review_exists(self, review_hash):
+        """
+        Fast check if review already exists in database
+        Returns: True if exists, False if new
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT COUNT(*) FROM reviews WHERE review_hash = ?",
+            (review_hash,)
+        )
+        
+        count = cursor.fetchone()[0]
+        conn.close()
+        
+        return count > 0
+    
     def init_database(self):
-        """Create database tables"""
+        """Create database tables and run migrations"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -35,8 +68,15 @@ class ReviewsDatabase:
             timestamp_parsed DATETIME,
             time_category TEXT,
             scrape_session_id TEXT,
+            review_hash TEXT UNIQUE,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
+        ''')
+        
+        # Create index for faster duplicate checking
+        cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_review_hash 
+        ON reviews(review_hash)
         ''')
         
         # Scrape sessions table
@@ -56,8 +96,64 @@ class ReviewsDatabase:
         ''')
         
         conn.commit()
+        
+        # Run migration for existing databases
+        self._migrate_add_review_hash(conn, cursor)
+        
         conn.close()
         print("✅ Database tables created/verified")
+    
+    def _migrate_add_review_hash(self, conn, cursor):
+        """
+        Migration: Add review_hash column to existing reviews table
+        Safe to run multiple times (checks if column exists)
+        """
+        # Check if review_hash column exists
+        cursor.execute("PRAGMA table_info(reviews)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'review_hash' not in columns:
+            print("🔄 Migrating database: Adding review_hash column...")
+            
+            # Add review_hash column
+            cursor.execute("ALTER TABLE reviews ADD COLUMN review_hash TEXT")
+            
+            # Generate hashes for existing reviews
+            cursor.execute("""
+                SELECT id, business_name, reviewer_name, date_original, review_text 
+                FROM reviews
+            """)
+            existing_reviews = cursor.fetchall()
+            
+            updated_count = 0
+            for review in existing_reviews:
+                review_id, business_name, reviewer_name, date_original, review_text = review
+                
+                # Generate hash
+                review_hash = self.generate_review_hash(
+                    business_name or "",
+                    reviewer_name or "",
+                    date_original or "",
+                    review_text or ""
+                )
+                
+                # Update review with hash
+                cursor.execute(
+                    "UPDATE reviews SET review_hash = ? WHERE id = ?",
+                    (review_hash, review_id)
+                )
+                updated_count += 1
+            
+            # Create index
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_review_hash 
+                ON reviews(review_hash)
+            ''')
+            
+            conn.commit()
+            print(f"   ✅ Migration complete: {updated_count} reviews updated with hashes")
+        else:
+            print("   ℹ️  Database already up to date")
     
     def save_scrape_session(self, session_data):
         """Save scrape session information"""
@@ -90,7 +186,19 @@ class ReviewsDatabase:
         self.save_scrape_session(session_data)
     
     def add_review(self, review_data):
-        """Add single review (for scraper compatibility)"""
+        """Add single review with duplicate check (for scraper compatibility)"""
+        # Generate hash for duplicate check
+        review_hash = self.generate_review_hash(
+            review_data.get('business_name', ''),
+            review_data.get('reviewer_name', ''),
+            review_data.get('review_date', ''),
+            review_data.get('review_text', '')
+        )
+        
+        # Quick duplicate check
+        if self.check_review_exists(review_hash):
+            return False  # Skip duplicate
+        
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -108,8 +216,8 @@ class ReviewsDatabase:
             cursor.execute('''
             INSERT INTO reviews 
             (business_name, business_url, reviewer_name, rating, date_original,
-             review_text, timestamp_parsed, time_category, scrape_session_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             review_text, timestamp_parsed, time_category, scrape_session_id, review_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 review_data.get('business_name', ''),
                 review_data.get('business_url', ''),
@@ -119,20 +227,25 @@ class ReviewsDatabase:
                 review_data.get('review_text', ''),
                 review_data.get('timestamp_parsed'),
                 review_data.get('time_category', ''),
-                review_data.get('session_id', '')
+                review_data.get('session_id', ''),
+                review_hash
             ))
             
             conn.commit()
             conn.close()
             return True
             
+        except sqlite3.IntegrityError:
+            # Duplicate hash (shouldn't happen with pre-check, but safe)
+            conn.close()
+            return False
         except Exception as e:
             print(f"❌ Review save error: {e}")
             conn.close()
             return False
     
     def save_reviews(self, reviews_data, session_id):
-        """Save reviews to database"""
+        """Save reviews to database with duplicate detection"""
         if not reviews_data:
             print("⚠️ No reviews found to save")
             return
@@ -141,29 +254,56 @@ class ReviewsDatabase:
         cursor = conn.cursor()
         
         saved_count = 0
+        skipped_count = 0
         
         for review in reviews_data:
-            cursor.execute('''
-            INSERT INTO reviews 
-            (business_name, business_url, reviewer_name, rating, date_original,
-             review_text, timestamp_parsed, time_category, scrape_session_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
+            # Generate hash
+            review_hash = self.generate_review_hash(
                 review.get('business_name', ''),
-                review.get('business_url', ''),
                 review.get('reviewer_name', ''),
-                review.get('rating'),
                 review.get('date', ''),
-                review.get('review_text', ''),
-                review.get('timestamp_parsed'),
-                review.get('time_category', ''),
-                session_id
-            ))
-            saved_count += 1
+                review.get('review_text', '')
+            )
+            
+            # Quick check if exists
+            cursor.execute(
+                "SELECT COUNT(*) FROM reviews WHERE review_hash = ?",
+                (review_hash,)
+            )
+            
+            if cursor.fetchone()[0] > 0:
+                skipped_count += 1
+                continue  # Skip duplicate
+            
+            try:
+                cursor.execute('''
+                INSERT INTO reviews 
+                (business_name, business_url, reviewer_name, rating, date_original,
+                 review_text, timestamp_parsed, time_category, scrape_session_id, review_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    review.get('business_name', ''),
+                    review.get('business_url', ''),
+                    review.get('reviewer_name', ''),
+                    review.get('rating'),
+                    review.get('date', ''),
+                    review.get('review_text', ''),
+                    review.get('timestamp_parsed'),
+                    review.get('time_category', ''),
+                    session_id,
+                    review_hash
+                ))
+                saved_count += 1
+            except sqlite3.IntegrityError:
+                skipped_count += 1
+                continue
         
         conn.commit()
         conn.close()
-        print(f"✅ {saved_count} reviews saved to database")
+        
+        print(f"✅ {saved_count} new reviews saved to database")
+        if skipped_count > 0:
+            print(f"⏭️ {skipped_count} duplicate reviews skipped")
     
     def get_all_reviews(self):
         """Get all reviews"""
@@ -290,19 +430,25 @@ def test_database():
     print("2️⃣ Saving test reviews...")
     db.save_reviews(test_reviews, test_session['session_id'])
     
+    # Test duplicate detection
+    print("3️⃣ Testing duplicate detection...")
+    print("   Attempting to save same reviews again...")
+    db.save_reviews(test_reviews, test_session['session_id'])
+    print("   ✅ Duplicate detection working!")
+    
     # Read data back
-    print("3️⃣ Reading data...")
+    print("4️⃣ Reading data...")
     all_reviews = db.get_all_reviews()
     print(f"📊 Total reviews: {len(all_reviews)}")
     
     # Show statistics
-    print("4️⃣ Statistics:")
+    print("5️⃣ Statistics:")
     stats = db.get_statistics()
     for key, value in stats.items():
         print(f"   📈 {key}: {value}")
     
     # Show first few reviews
-    print("5️⃣ First 3 reviews:")
+    print("6️⃣ First 3 reviews:")
     if len(all_reviews) > 0:
         for i, review in all_reviews.head(3).iterrows():
             print(f"   👤 {review['reviewer_name']} - ⭐ {review['rating']}")
