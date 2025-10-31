@@ -136,6 +136,9 @@ class APIPipelineManager:
             
             # Save reviews
             for review in new_reviews:
+                # Calculate time category based on timestamp
+                time_category = self._calculate_time_category(review['timestamp_parsed'])
+                
                 review_data = {
                     'business_name': review['business_name'],
                     'business_url': review['business_url'],
@@ -143,8 +146,9 @@ class APIPipelineManager:
                     'rating': review['rating'],
                     'review_date': review['date_original'],
                     'review_text': review['review_text'],
-                    'timestamp': review['timestamp_parsed'],
-                    'scrape_session_id': session_id,
+                    'timestamp_parsed': review['timestamp_parsed'].isoformat() if review['timestamp_parsed'] else None,
+                    'time_category': time_category,
+                    'session_id': session_id,
                     'review_hash': review['review_hash']
                 }
                 self.db.add_review(review_data)
@@ -210,6 +214,42 @@ class APIPipelineManager:
             'results': results,
             'stats': self.stats
         }
+    
+    def _calculate_time_category(self, timestamp: datetime) -> str:
+        """
+        Calculate time category from timestamp
+        
+        Args:
+            timestamp: Review timestamp
+            
+        Returns:
+            Time category string
+        """
+        if not timestamp:
+            return "Unknown"
+        
+        now = datetime.now()
+        diff = now - timestamp
+        
+        if diff.days == 0:
+            if diff.seconds < 3600:  # Less than 1 hour
+                return "Last Hour"
+            else:
+                return "Today"
+        elif diff.days == 1:
+            return "Yesterday"
+        elif diff.days < 7:
+            return "This Week"
+        elif diff.days < 30:
+            return "This Month"
+        elif diff.days < 90:
+            return "Last 3 Months"
+        elif diff.days < 180:
+            return "Last 6 Months"
+        elif diff.days < 365:
+            return "This Year"
+        else:
+            return "Older"
     
     def get_statistics(self) -> Dict:
         """Get pipeline statistics"""

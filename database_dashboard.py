@@ -315,13 +315,21 @@ def run_api_collector():
                     
                     # Check if exists
                     if not db.check_review_exists(review_hash):
-                        # Add new review
+                        # Convert timestamp to datetime if needed
+                        timestamp_obj = review.timestamp if hasattr(review, 'timestamp') else None
+                        
+                        # Calculate time category
+                        time_category = categorize_timestamp(timestamp_obj) if timestamp_obj else "Unknown"
+                        
+                        # Add new review with proper timestamp fields
                         db.add_review(
                             business_name=business_name,
                             reviewer_name=review.author_name,
                             rating=review.rating,
                             review_text=review.text or "",
                             date_original=review.relative_time,
+                            timestamp_parsed=timestamp_obj.isoformat() if timestamp_obj else None,
+                            time_category=time_category,
                             review_hash=review_hash
                         )
                         new_count += 1
@@ -432,9 +440,13 @@ def main():
         st.warning("📭 No data available yet. Please collect new data from the sidebar.")
         return
     
-    # Add time parsing
-    df['timestamp_parsed'] = df['date_original'].apply(parse_relative_time_to_timestamp)
-    df['time_category'] = df['timestamp_parsed'].apply(categorize_timestamp)
+    # Convert timestamp_parsed from string to datetime if needed
+    if 'timestamp_parsed' in df.columns and df['timestamp_parsed'].dtype == 'object':
+        df['timestamp_parsed'] = pd.to_datetime(df['timestamp_parsed'], errors='coerce')
+    
+    # Use time_category from database if available, otherwise calculate
+    if 'time_category' not in df.columns or df['time_category'].isna().all():
+        df['time_category'] = df['timestamp_parsed'].apply(categorize_timestamp)
     
     # 🎯 BUSINESS FILTERING SYSTEM
     st.markdown("## 🏢 Business Selection")
@@ -693,9 +705,13 @@ def main():
             if timestamp_parsed:
                 try:
                     if isinstance(timestamp_parsed, str):
-                        formatted_date = timestamp_parsed
-                    else:
+                        # Parse ISO format string to datetime
+                        dt = pd.to_datetime(timestamp_parsed)
+                        formatted_date = dt.strftime('%d.%m.%Y %H:%M')
+                    elif hasattr(timestamp_parsed, 'strftime'):
                         formatted_date = timestamp_parsed.strftime('%d.%m.%Y %H:%M')
+                    else:
+                        formatted_date = str(timestamp_parsed)
                 except:
                     formatted_date = str(timestamp_parsed)
             
