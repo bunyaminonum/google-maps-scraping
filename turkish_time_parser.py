@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 """
-🕒 Türkçe Zaman İfadeleri Parser
-Google Maps'teki "X önce" ifadelerini gerçek timestamp'lere çevirir
+🕒 Turkish Time Expression Parser
+Converts "X ago" expressions from Google Maps to real timestamps
 """
 
 import re
@@ -11,39 +11,39 @@ from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
 class TurkishTimeParser:
-    """Türkçe zaman ifadelerini parse eder"""
+    """Parses Turkish time expressions"""
     
     def __init__(self):
-        # Zaman ifadeleri regex pattern'leri
+        # Time expression regex patterns
         self.time_patterns = [
-            # "X saat önce" pattern'i
+            # "X saat önce" (X hours ago) pattern
             (r'(\d+)\s*saat\s*önce', 'hours'),
-            # "X gün önce" pattern'i  
+            # "X gün önce" (X days ago) pattern  
             (r'(\d+)\s*gün\s*önce', 'days'),
-            # "X hafta önce" pattern'i
+            # "X hafta önce" (X weeks ago) pattern
             (r'(\d+)\s*hafta\s*önce', 'weeks'),
-            # "X ay önce" pattern'i
+            # "X ay önce" (X months ago) pattern
             (r'(\d+)\s*ay\s*önce', 'months'),
-            # "X yıl önce" pattern'i
+            # "X yıl önce" (X years ago) pattern
             (r'(\d+)\s*yıl\s*önce', 'years'),
-            # Tekil versiyonlar
+            # Singular versions
             (r'bir\s*saat\s*önce', 'hours'),
             (r'bir\s*gün\s*önce', 'days'), 
             (r'bir\s*hafta\s*önce', 'weeks'),
             (r'bir\s*ay\s*önce', 'months'),
             (r'bir\s*yıl\s*önce', 'years'),
-            # Bugün, dün gibi ifadeler
+            # Today, yesterday expressions
             (r'bugün', 'today'),
             (r'dün', 'yesterday'),
         ]
         
     def parse_turkish_time(self, time_text: str, reference_time: Optional[datetime] = None) -> Tuple[datetime, str]:
         """
-        Türkçe zaman ifadesini parse eder
+        Parse Turkish time expression
         
         Args:
-            time_text: "2 saat önce", "bir gün önce" gibi metinler
-            reference_time: Referans zaman (varsayılan: şimdi)
+            time_text: Text like "2 saat önce", "bir gün önce"
+            reference_time: Reference time (default: now)
             
         Returns:
             (parsed_datetime, time_category)
@@ -53,29 +53,29 @@ class TurkishTimeParser:
             
         time_text = time_text.lower().strip()
         
-        # Pattern'leri kontrol et
+        # Check patterns
         for pattern, unit in self.time_patterns:
             match = re.search(pattern, time_text, re.IGNORECASE)
             if match:
                 return self._calculate_timestamp(match, unit, reference_time, time_text)
         
-        # Eğer pattern eşleşmezse bugün olarak kabul et
+        # If no pattern matches, assume today
         return reference_time, 'today'
     
     def _calculate_timestamp(self, match, unit: str, reference_time: datetime, original_text: str) -> Tuple[datetime, str]:
-        """Timestamp hesapla"""
+        """Calculate timestamp"""
         
-        # Sayısal değeri al
+        # Get numeric value
         if match.groups():
             number = int(match.group(1))
         else:
-            # "bir" gibi kelimeler için
+            # For words like "bir" (one)
             number = 1
         
-        # Zaman kategorisini belirle
+        # Determine time category
         time_category = self._get_time_category(number, unit)
         
-        # Timestamp hesapla
+        # Calculate timestamp
         if unit == 'hours':
             calculated_time = reference_time - timedelta(hours=number)
         elif unit == 'days':
@@ -83,10 +83,10 @@ class TurkishTimeParser:
         elif unit == 'weeks':
             calculated_time = reference_time - timedelta(weeks=number)
         elif unit == 'months':
-            # Ortalama 30 gün kabul edelim
+            # Assume average 30 days
             calculated_time = reference_time - timedelta(days=number * 30)
         elif unit == 'years':
-            # Ortalama 365 gün kabul edelim
+            # Assume average 365 days
             calculated_time = reference_time - timedelta(days=number * 365)
         elif unit == 'today':
             calculated_time = reference_time
@@ -101,7 +101,7 @@ class TurkishTimeParser:
         return calculated_time, time_category
     
     def _get_time_category(self, number: int, unit: str) -> str:
-        """Zaman kategorisi belirle"""
+        """Determine time category"""
         if unit == 'hours':
             if number < 24:
                 return 'today'
@@ -133,10 +133,10 @@ class TurkishTimeParser:
             return 'today'
 
 def test_turkish_time_parser():
-    """Test fonksiyonu"""
+    """Test function"""
     parser = TurkishTimeParser()
     
-    # Test verileri
+    # Test data
     test_cases = [
         "1 saat önce",
         "2 saat önce", 
@@ -153,11 +153,11 @@ def test_turkish_time_parser():
         "bilinmeyen format"
     ]
     
-    print("🧪 TÜRKÇE ZAMAN PARSER TESTİ")
+    print("🧪 TURKISH TIME PARSER TEST")
     print("="*50)
     
-    reference_time = datetime(2025, 9, 8, 7, 0, 0)  # 8 Eylül 2025, saat 07:00
-    print(f"📅 Referans zaman: {reference_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    reference_time = datetime(2025, 9, 8, 7, 0, 0)  # September 8, 2025, 07:00
+    print(f"📅 Reference time: {reference_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*50)
     
     for test_text in test_cases:
@@ -165,9 +165,9 @@ def test_turkish_time_parser():
         calculated_time, category = parser.parse_turkish_time(test_text, reference_time)
         
         time_diff = reference_time - calculated_time
-        print(f"   📊 Sonuç: {calculated_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"   📅 Kategori: {category}")
-        print(f"   ⏰ Fark: {time_diff}")
+        print(f"   📊 Result: {calculated_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"   📅 Category: {category}")
+        print(f"   ⏰ Difference: {time_diff}")
 
 if __name__ == "__main__":
     test_turkish_time_parser()

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-🚀 Database Google Maps Scraper - Paralel Sürüm
+🚀 Database Google Maps Scraper - Parallel Version
 Ban-safe parallel scraping with database integration
 """
 
@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 @dataclass
 class ParallelTask:
-    """Paralel scraping task'ı"""
+    """Parallel scraping task"""
     business_name: str
     business_url: str
     target_reviews: int = 50
@@ -25,14 +25,14 @@ class ParallelTask:
     session_prefix: str = "parallel"
 
 class ParallelDatabaseScraper:
-    """Database entegrasyonlu paralel scraper"""
+    """Parallel scraper with database integration"""
     
     def __init__(self, db_path="reviews.db", max_workers=2, safe_mode=True):
         """
         Args:
-            db_path: Veritabanı dosya yolu
-            max_workers: Maksimum eşzamanlı worker sayısı (Google için 2-3 önerilen)
-            safe_mode: True ise ekstra güvenlik önlemleri
+            db_path: Database file path
+            max_workers: Maximum concurrent workers (2-3 recommended for Google)
+            safe_mode: Enable extra safety measures if True
         """
         self.db_path = db_path
         self.max_workers = max_workers
@@ -41,24 +41,24 @@ class ParallelDatabaseScraper:
         self.all_results = []
         
     def create_worker_scraper(self, worker_id: int, headless: bool = True):
-        """Worker için scraper oluştur"""
+        """Create scraper for worker"""
         try:
-            # Her worker için ayrı browser profili
+            # Separate browser profile for each worker
             scraper = DatabaseGoogleMapsScraper(
                 headless=headless,
                 db_path=self.db_path
             )
             
-            # Safe mode ayarları
+            # Safe mode settings
             if self.safe_mode:
-                # User agent rastgeleleştir
+                # Randomize user agent
                 user_agents = [
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0",
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/116.0",
                     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/115.0"
                 ]
                 
-                # Browser'a random user agent ekle
+                # Add random user agent to browser
                 if hasattr(scraper, 'driver') and scraper.driver:
                     ua = random.choice(user_agents)
                     scraper.driver.execute_cdp_cmd('Network.setUserAgentOverride', {"userAgent": ua})
@@ -66,11 +66,11 @@ class ParallelDatabaseScraper:
             return scraper
             
         except Exception as e:
-            print(f"❌ Worker {worker_id} scraper oluşturma hatası: {e}")
+            print(f"❌ Worker {worker_id} scraper creation error: {e}")
             return None
     
     def smart_delay(self, worker_id: int, operation: str = "default"):
-        """Akıllı gecikme - ban'den kaçınmak için"""
+        """Smart delay - avoid bans"""
         base_delays = {
             "start": (2.0, 5.0),
             "page_load": (3.0, 6.0),
@@ -82,46 +82,46 @@ class ParallelDatabaseScraper:
         min_delay, max_delay = base_delays.get(operation, base_delays["default"])
         
         if self.safe_mode:
-            # Safe mode'da gecikmeleri artır
+            # Increase delays in safe mode
             min_delay *= 1.5
             max_delay *= 2.0
         
         delay = random.uniform(min_delay, max_delay)
         
-        print(f"⏱️ Worker {worker_id}: {operation} için {delay:.1f}s bekleniyor...")
+        print(f"⏱️ Worker {worker_id}: Waiting {delay:.1f}s for {operation}...")
         time.sleep(delay)
         
         return delay
     
     def scrape_worker_task(self, worker_id: int, tasks: List[ParallelTask]):
-        """Bir worker'ın tüm task'larını işle"""
+        """Process all tasks for a worker"""
         worker_results = []
         scraper = None
         
         try:
-            print(f"🔧 Worker {worker_id} başlıyor - {len(tasks)} task")
+            print(f"🔧 Worker {worker_id} starting - {len(tasks)} tasks")
             
-            # Worker başlangıç gecikmesi (overlapping'i önlemek için)
+            # Worker startup delay (prevent overlapping)
             self.smart_delay(worker_id, "start")
             
-            # Scraper oluştur
+            # Create scraper
             scraper = self.create_worker_scraper(worker_id, headless=True)
             if not scraper:
-                raise Exception("Scraper oluşturulamadı")
+                raise Exception("Failed to create scraper")
             
-            # Task'ları sırayla işle
+            # Process tasks sequentially
             for i, task in enumerate(tasks):
                 try:
-                    print(f"📋 Worker {worker_id}: {task.business_name} işleniyor ({i+1}/{len(tasks)})")
+                    print(f"📋 Worker {worker_id}: Processing {task.business_name} ({i+1}/{len(tasks)})")
                     
-                    # İşletmeler arası gecikme
+                    # Delay between businesses
                     if i > 0:
                         self.smart_delay(worker_id, "between_businesses")
                     
-                    # Session ID oluştur
+                    # Create session ID
                     session_id = f"{task.session_prefix}_{worker_id}_{int(time.time())}"
                     
-                    # Scraping yap
+                    # Perform scraping
                     result = scraper.extract_reviews_with_database(
                         business_name=task.business_name,
                         business_url=task.business_url,
@@ -131,8 +131,8 @@ class ParallelDatabaseScraper:
                     
                     if result["success"]:
                         session_id = result.get("session_id", f"worker_{worker_id}_{int(time.time())}")
-                        print(f"✅ Worker {worker_id}: {task.business_name} tamamlandı")
-                        print(f"   📊 {result['total_reviews']} yorum, {result['text_reviews']} metin")
+                        print(f"✅ Worker {worker_id}: {task.business_name} completed")
+                        print(f"   📊 {result['total_reviews']} reviews, {result['text_reviews']} text")
                         
                         worker_results.append({
                             "worker_id": worker_id,
@@ -145,17 +145,17 @@ class ParallelDatabaseScraper:
                         })
                     else:
                         session_id = f"failed_worker_{worker_id}_{int(time.time())}"
-                        print(f"⚠️ Worker {worker_id}: {task.business_name} başarısız")
+                        print(f"⚠️ Worker {worker_id}: {task.business_name} failed")
                         worker_results.append({
                             "worker_id": worker_id,
                             "business_name": task.business_name,
                             "session_id": session_id,
                             "success": False,
-                            "error": result.get("error", "Bilinmeyen hata")
+                            "error": result.get("error", "Unknown error")
                         })
                         
                 except Exception as e:
-                    print(f"❌ Worker {worker_id}: {task.business_name} task hatası - {e}")
+                    print(f"❌ Worker {worker_id}: {task.business_name} task error - {e}")
                     worker_results.append({
                         "worker_id": worker_id,
                         "business_name": task.business_name,
@@ -163,19 +163,19 @@ class ParallelDatabaseScraper:
                         "error": str(e)
                     })
             
-            print(f"🏁 Worker {worker_id} tamamlandı - {len(worker_results)} sonuç")
+            print(f"🏁 Worker {worker_id} completed - {len(worker_results)} results")
             return worker_results
             
         except Exception as e:
-            print(f"❌ Worker {worker_id} genel hatası: {e}")
+            print(f"❌ Worker {worker_id} general error: {e}")
             return [{
                 "worker_id": worker_id,
                 "success": False,
-                "error": f"Worker hatası: {e}"
+                "error": f"Worker error: {e}"
             }]
             
         finally:
-            # Scraper'ı temizle
+            # Clean up scraper
             if scraper:
                 try:
                     scraper.cleanup()
@@ -183,63 +183,63 @@ class ParallelDatabaseScraper:
                     pass
     
     def parallel_scrape_businesses(self, tasks: List[ParallelTask]):
-        """Ana paralel scraping fonksiyonu"""
-        print(f"🚀 PARALEL SCRAPING BAŞLIYOR")
+        """Main parallel scraping function"""
+        print(f"🚀 PARALLEL SCRAPING STARTING")
         print(f"="*60)
-        print(f"📋 İşletme sayısı: {len(tasks)}")
-        print(f"🔧 Worker sayısı: {self.max_workers}")
-        print(f"🛡️ Safe mode: {'Açık' if self.safe_mode else 'Kapalı'}")
-        print(f"💾 Veritabanı: {self.db_path}")
+        print(f"📋 Business count: {len(tasks)}")
+        print(f"🔧 Worker count: {self.max_workers}")
+        print(f"🛡️ Safe mode: {'Enabled' if self.safe_mode else 'Disabled'}")
+        print(f"💾 Database: {self.db_path}")
         print(f"="*60)
         
-        # Task'ları worker'lara dağıt
+        # Distribute tasks to workers
         tasks_per_worker = []
         for i in range(self.max_workers):
             worker_tasks = [task for j, task in enumerate(tasks) if j % self.max_workers == i]
             if worker_tasks:
                 tasks_per_worker.append(worker_tasks)
         
-        print(f"📊 Task dağılımı:")
+        print(f"📊 Task distribution:")
         for i, worker_tasks in enumerate(tasks_per_worker):
-            print(f"   Worker {i+1}: {len(worker_tasks)} task")
+            print(f"   Worker {i+1}: {len(worker_tasks)} tasks")
         
-        # Paralel execution
+        # Parallel execution
         start_time = time.time()
         all_results = []
         
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            # Worker'ları başlat
+            # Start workers
             futures = []
             for i, worker_tasks in enumerate(tasks_per_worker):
                 worker_id = i + 1
                 future = executor.submit(self.scrape_worker_task, worker_id, worker_tasks)
                 futures.append((worker_id, future))
             
-            # Sonuçları topla
+            # Collect results
             for worker_id, future in futures:
                 try:
                     worker_results = future.result()
                     all_results.extend(worker_results)
-                    print(f"✅ Worker {worker_id} sonuçları alındı")
+                    print(f"✅ Worker {worker_id} results received")
                 except Exception as e:
-                    print(f"❌ Worker {worker_id} future hatası: {e}")
+                    print(f"❌ Worker {worker_id} future error: {e}")
                     all_results.append({
                         "worker_id": worker_id,
                         "success": False,
-                        "error": f"Future hatası: {e}"
+                        "error": f"Future error: {e}"
                     })
         
         end_time = time.time()
         
-        # Özet rapor
+        # Summary report
         self.print_final_report(all_results, start_time, end_time)
         
         return all_results
     
     def print_final_report(self, results: List[Dict], start_time: float, end_time: float):
-        """Son raporu yazdır"""
+        """Print final report"""
         print(f"\n" + "="*60)
-        print(f"📊 PARALEL SCRAPING SONUÇLARI")
+        print(f"📊 PARALLEL SCRAPING RESULTS")
         print(f"="*60)
         
         successful = len([r for r in results if r.get("success", False)])
@@ -248,43 +248,43 @@ class ParallelDatabaseScraper:
         
         duration = end_time - start_time
         
-        print(f"⏱️ Toplam süre: {duration:.1f} saniye")
-        print(f"✅ Başarılı işletme: {successful}/{len(results)}")
-        print(f"📊 Toplam yorum: {total_reviews}")
-        print(f"💬 Metin yorumu: {total_text}")
+        print(f"⏱️ Total time: {duration:.1f} seconds")
+        print(f"✅ Successful businesses: {successful}/{len(results)}")
+        print(f"📊 Total reviews: {total_reviews}")
+        print(f"💬 Text reviews: {total_text}")
         
         if duration > 0:
-            print(f"🚀 Hız: {total_reviews/duration:.1f} yorum/saniye")
-            print(f"📈 Verimlilik: {total_reviews/(duration/60):.1f} yorum/dakika")
+            print(f"🚀 Speed: {total_reviews/duration:.1f} reviews/second")
+            print(f"📈 Efficiency: {total_reviews/(duration/60):.1f} reviews/minute")
         
-        print(f"\n📋 Detay Sonuçlar:")
+        print(f"\n📋 Detailed Results:")
         for result in results:
             if result.get("success", False):
-                business = result.get("business_name", "Bilinmeyen")
+                business = result.get("business_name", "Unknown")
                 reviews = result.get("total_reviews", 0)
                 worker = result.get("worker_id", "?")
-                print(f"   ✅ {business}: {reviews} yorum (Worker {worker})")
+                print(f"   ✅ {business}: {reviews} reviews (Worker {worker})")
             else:
-                business = result.get("business_name", "Bilinmeyen")
-                error = result.get("error", "Bilinmeyen hata")
+                business = result.get("business_name", "Unknown")
+                error = result.get("error", "Unknown error")
                 worker = result.get("worker_id", "?")
                 print(f"   ❌ {business}: {error} (Worker {worker})")
 
 def demo_parallel_database_scraping():
-    """Paralel database scraping demo"""
-    print("🎯 PARALEL DATABASE SCRAPING DEMO")
+    """Parallel database scraping demo"""
+    print("🎯 PARALLEL DATABASE SCRAPING DEMO")
     print("="*50)
     
-    # Test işletmeleri
+    # Test businesses
     tasks = [
         ParallelTask(
-            business_name="İstanbul Havalimanı",
+            business_name="Istanbul Airport",
             business_url="https://www.google.com/maps/place/İstanbul+Havalimanı/@41.2619652,28.741773,12z/data=!3m1!4b1!4m6!3m5!1s0x14b015c8ef2a5935:0x8d1a87ba3a5b8b4e!8m2!3d41.2619652!4d28.741773!16zL20vMDZfZm5z?entry=ttu",
             target_reviews=30,
             target_text_reviews=8
         ),
         ParallelTask(
-            business_name="Sabiha Gökçen Havalimanı",
+            business_name="Sabiha Gokcen Airport",
             business_url="https://www.google.com/maps/place/İstanbul+Sabiha+Gökçen+Uluslararası+Havalimanı/@40.8986426,29.3092776,12z/data=!3m1!4b1!4m6!3m5!1s0x14cadddc0d8b2b73:0x8d1a87ba3a5b8b4e!8m2!3d40.8986426!4d29.3092776!16zL20vMDZfZm5z?entry=ttu",
             target_reviews=30,
             target_text_reviews=8
@@ -297,30 +297,30 @@ def demo_parallel_database_scraping():
         )
     ]
     
-    # Paralel scraper oluştur
+    # Create parallel scraper
     scraper = ParallelDatabaseScraper(
         db_path="reviews.db",
-        max_workers=2,  # Güvenli parallelism
-        safe_mode=True  # Ekstra güvenlik
+        max_workers=2,  # Safe parallelism
+        safe_mode=True  # Extra security
     )
     
-    # Scraping başlat
+    # Start scraping
     results = scraper.parallel_scrape_businesses(tasks)
     
-    # Veritabanı kontrolü
-    print(f"\n💾 VERİTABANI KONTROLÜ:")
+    # Database check
+    print(f"\n💾 DATABASE CHECK:")
     db = ReviewsDatabase("reviews.db")
     df = db.get_all_reviews()
     
-    print(f"📊 Toplam kayıt: {len(df)}")
-    print(f"🏢 İşletme sayısı: {df['business_name'].nunique()}")
+    print(f"📊 Total records: {len(df)}")
+    print(f"🏢 Business count: {df['business_name'].nunique()}")
     
-    # En son session'ları göster
+    # Show recent sessions
     recent_sessions = df['scrape_session_id'].value_counts().head(5)
-    print(f"📋 En son session'lar:")
+    print(f"📋 Recent sessions:")
     for session, count in recent_sessions.items():
         if session and "parallel" in str(session):
-            print(f"   🗂️ {session}: {count} yorum")
+            print(f"   🗂️ {session}: {count} reviews")
 
 if __name__ == "__main__":
     demo_parallel_database_scraping()

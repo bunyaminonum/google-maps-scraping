@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Google Maps Reviews Database Test
-Veritabanı entegrasyonu test scripti
+Database integration test script
 """
 
 import sqlite3
@@ -13,16 +13,16 @@ import os
 
 class ReviewsDatabase:
     def __init__(self, db_path="reviews.db"):
-        """Veritabanı bağlantısını başlat"""
+        """Initialize database connection"""
         self.db_path = db_path
         self.init_database()
     
     def init_database(self):
-        """Veritabanı tablolarını oluştur"""
+        """Create database tables"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Reviews tablosu
+        # Reviews table
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS reviews (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +39,7 @@ class ReviewsDatabase:
         )
         ''')
         
-        # Scrape sessions tablosu
+        # Scrape sessions table
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS scrape_sessions (
             id TEXT PRIMARY KEY,
@@ -57,10 +57,10 @@ class ReviewsDatabase:
         
         conn.commit()
         conn.close()
-        print("✅ Veritabanı tabloları oluşturuldu/kontrol edildi")
+        print("✅ Database tables created/verified")
     
     def save_scrape_session(self, session_data):
-        """Scrape session bilgilerini kaydet"""
+        """Save scrape session information"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -83,19 +83,19 @@ class ReviewsDatabase:
         
         conn.commit()
         conn.close()
-        print(f"✅ Scrape session kaydedildi: {session_data['session_id']}")
+        print(f"✅ Scrape session saved: {session_data['session_id']}")
     
     def add_session(self, session_data):
-        """Session ekleme (scraper uyumluluk için)"""
+        """Add session (for scraper compatibility)"""
         self.save_scrape_session(session_data)
     
     def add_review(self, review_data):
-        """Tek yorum ekleme (scraper uyumluluk için)"""
+        """Add single review (for scraper compatibility)"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         try:
-            # Rating değerini integer'a dönüştür
+            # Convert rating value to integer
             rating_value = review_data.get('rating')
             if rating_value is not None:
                 try:
@@ -127,14 +127,14 @@ class ReviewsDatabase:
             return True
             
         except Exception as e:
-            print(f"❌ Yorum kaydetme hatası: {e}")
+            print(f"❌ Review save error: {e}")
             conn.close()
             return False
     
     def save_reviews(self, reviews_data, session_id):
-        """Yorumları veritabanına kaydet"""
+        """Save reviews to database"""
         if not reviews_data:
-            print("⚠️ Kaydedilecek yorum bulunamadı")
+            print("⚠️ No reviews found to save")
             return
         
         conn = sqlite3.connect(self.db_path)
@@ -163,10 +163,10 @@ class ReviewsDatabase:
         
         conn.commit()
         conn.close()
-        print(f"✅ {saved_count} yorum veritabanına kaydedildi")
+        print(f"✅ {saved_count} reviews saved to database")
     
     def get_all_reviews(self):
-        """Tüm yorumları getir"""
+        """Get all reviews"""
         conn = sqlite3.connect(self.db_path)
         
         query = '''
@@ -182,7 +182,7 @@ class ReviewsDatabase:
         return df
     
     def get_reviews_by_business(self, business_name):
-        """Belirli işletmenin yorumlarını getir"""
+        """Get reviews for specific business"""
         conn = sqlite3.connect(self.db_path)
         
         query = '''
@@ -197,23 +197,23 @@ class ReviewsDatabase:
         return df
     
     def get_statistics(self):
-        """Genel istatistikleri getir"""
+        """Get general statistics"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Toplam yorum sayısı
+        # Total review count
         cursor.execute("SELECT COUNT(*) FROM reviews")
         total_reviews = cursor.fetchone()[0]
         
-        # Toplam işletme sayısı
+        # Total business count
         cursor.execute("SELECT COUNT(DISTINCT business_name) FROM reviews")
         total_businesses = cursor.fetchone()[0]
         
-        # Ortalama puan
+        # Average rating
         cursor.execute("SELECT AVG(rating) FROM reviews WHERE rating IS NOT NULL")
         avg_rating = cursor.fetchone()[0]
         
-        # Metin yorumu olanlar
+        # Text reviews count
         cursor.execute("SELECT COUNT(*) FROM reviews WHERE review_text IS NOT NULL AND review_text != ''")
         text_reviews = cursor.fetchone()[0]
         
@@ -228,17 +228,17 @@ class ReviewsDatabase:
         }
 
 def test_database():
-    """Veritabanı fonksiyonlarını test et"""
-    print("🧪 VERİTABANI TEST BAŞLIYOR...")
+    """Test database functions"""
+    print("🧪 DATABASE TEST STARTING...")
     print("=" * 50)
     
-    # Veritabanı oluştur
+    # Create database
     db = ReviewsDatabase("test_reviews.db")
     
-    # Test verisi oluştur
+    # Create test data
     test_session = {
         'session_id': f"test_session_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        'business_name': 'Test İşletmesi',
+        'business_name': 'Test Business',
         'business_url': 'https://test.com',
         'target_text_reviews': 5,
         'target_total_ratings': 10,
@@ -248,61 +248,61 @@ def test_database():
         'status': 'completed'
     }
     
-    # Session kaydet
-    print("1️⃣ Test session kaydediliyor...")
+    # Save session
+    print("1️⃣ Saving test session...")
     db.save_scrape_session(test_session)
     
-    # Test yorumları oluştur
+    # Create test reviews
     test_reviews = [
         {
-            'business_name': 'Test İşletmesi',
+            'business_name': 'Test Business',
             'business_url': 'https://test.com',
-            'reviewer_name': 'Test Kullanıcı 1',
+            'reviewer_name': 'Test User 1',
             'rating': 5,
-            'date': '2 saat önce',
-            'review_text': 'Harika bir yer, kesinlikle tavsiye ederim!',
+            'date': '2 hours ago',
+            'review_text': 'Great place, definitely recommend!',
             'timestamp_parsed': datetime.now().isoformat(),
-            'time_category': 'Bugün'
+            'time_category': 'Today'
         },
         {
-            'business_name': 'Test İşletmesi',
+            'business_name': 'Test Business',
             'business_url': 'https://test.com',
-            'reviewer_name': 'Test Kullanıcı 2',
+            'reviewer_name': 'Test User 2',
             'rating': 4,
-            'date': '1 gün önce',
-            'review_text': 'Güzel hizmet ama biraz pahalı',
+            'date': '1 day ago',
+            'review_text': 'Nice service but a bit expensive',
             'timestamp_parsed': datetime.now().isoformat(),
-            'time_category': 'Dün'
+            'time_category': 'Yesterday'
         },
         {
-            'business_name': 'Test İşletmesi',
+            'business_name': 'Test Business',
             'business_url': 'https://test.com',
-            'reviewer_name': 'Test Kullanıcı 3',
+            'reviewer_name': 'Test User 3',
             'rating': 3,
-            'date': '1 hafta önce',
-            'review_text': '',  # Sadece puanlama
+            'date': '1 week ago',
+            'review_text': '',  # Rating only
             'timestamp_parsed': datetime.now().isoformat(),
-            'time_category': 'Bu Hafta'
+            'time_category': 'This Week'
         }
     ]
     
-    # Yorumları kaydet
-    print("2️⃣ Test yorumları kaydediliyor...")
+    # Save reviews
+    print("2️⃣ Saving test reviews...")
     db.save_reviews(test_reviews, test_session['session_id'])
     
-    # Verileri geri oku
-    print("3️⃣ Veriler okunuyor...")
+    # Read data back
+    print("3️⃣ Reading data...")
     all_reviews = db.get_all_reviews()
-    print(f"📊 Toplam yorum: {len(all_reviews)}")
+    print(f"📊 Total reviews: {len(all_reviews)}")
     
-    # İstatistikleri göster
-    print("4️⃣ İstatistikler:")
+    # Show statistics
+    print("4️⃣ Statistics:")
     stats = db.get_statistics()
     for key, value in stats.items():
         print(f"   📈 {key}: {value}")
     
-    # İlk birkaç yorumu göster
-    print("5️⃣ İlk 3 yorum:")
+    # Show first few reviews
+    print("5️⃣ First 3 reviews:")
     if len(all_reviews) > 0:
         for i, review in all_reviews.head(3).iterrows():
             print(f"   👤 {review['reviewer_name']} - ⭐ {review['rating']}")
@@ -310,10 +310,10 @@ def test_database():
                 print(f"      💬 {review['review_text'][:50]}...")
     
     print("=" * 50)
-    print("✅ VERİTABANI TESTİ TAMAMLANDI!")
+    print("✅ DATABASE TEST COMPLETED!")
     
     return db
 
 if __name__ == "__main__":
-    # Test çalıştır
+    # Run test
     test_database()
