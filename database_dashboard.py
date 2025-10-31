@@ -1,6 +1,6 @@
 """
-🎯 Google Maps Yorumları - Veritabanı Entegrasyonlu Dashboard
-Veritabanından veri çekme ile geliştirilmiş analiz arayüzü
+🎯 Google Maps Reviews - Database-Integrated Dashboard
+Advanced analysis interface with database data retrieval
 """
 
 import streamlit as st
@@ -19,9 +19,9 @@ from database_test import ReviewsDatabase
 from database_scraper import DatabaseGoogleMapsScraper
 import pytz
 
-# Sayfa konfigürasyonu
+# Page configuration
 st.set_page_config(
-    page_title="🎯 Google Maps Yorumları - DB Dashboard",
+    page_title="🎯 Google Maps Reviews - DB Dashboard",
     page_icon="💾",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -67,36 +67,36 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def load_data_from_database(db_path="reviews.db"):
-    """Veritabanından tüm verileri yükle"""
+    """Load all data from database"""
     try:
         db = ReviewsDatabase(db_path)
         
-        # Tüm yorumları getir
+        # Get all reviews
         df = db.get_all_reviews()
         
         if df.empty:
             return None, None
         
-        # Session istatistiklerini getir
+        # Get session statistics
         stats = db.get_statistics()
         
         return df, stats
     
     except Exception as e:
-        st.error(f"❌ Veritabanı yüklenirken hata: {str(e)}")
+        st.error(f"❌ Error loading database: {str(e)}")
         return None, None
 
 def parse_relative_time_to_timestamp(relative_time_str):
-    """Türkçe göreceli zaman ifadelerini timestamp'e çevirir"""
+    """Convert Turkish relative time expressions to timestamp"""
     try:
-        # Türkiye saat dilimi
+        # Turkey timezone
         tr_tz = pytz.timezone('Europe/Istanbul')
         now = datetime.now(tr_tz)
         
-        # Metni temizle ve küçük harfe çevir
+        # Clean text and convert to lowercase
         text = relative_time_str.lower().strip()
         
-        # Türkçe zaman kalıpları
+        # Turkish time patterns
         patterns = [
             (r'(\d+)\s*saat\s*önce', 'hours'),
             (r'(\d+)\s*gün\s*önce', 'days'),
@@ -144,48 +144,48 @@ def parse_relative_time_to_timestamp(relative_time_str):
         return datetime.now(tr_tz)
 
 def categorize_timestamp(timestamp):
-    """Timestamp'i zaman kategorisine ayır"""
+    """Categorize timestamp into time periods"""
     try:
         tr_tz = pytz.timezone('Europe/Istanbul')
         now = datetime.now(tr_tz)
         
-        # Timestamp'i timezone-aware yap
+        # Make timestamp timezone-aware
         if timestamp.tzinfo is None:
             timestamp = tr_tz.localize(timestamp)
         
         diff = now - timestamp
         
         if diff.days == 0:
-            return "Bugün"
+            return "Today"
         elif diff.days == 1:
-            return "Dün"
+            return "Yesterday"
         elif diff.days <= 7:
-            return "Bu Hafta"
+            return "This Week"
         elif diff.days <= 30:
-            return "Bu Ay"
+            return "This Month"
         else:
-            return "Eski"
+            return "Older"
     except:
-        return "Zaman bilgisi belirsiz"
+        return "Time Unknown"
 
 def run_new_scraper():
-    """Yeni veri toplama işlemi"""
-    with st.spinner("🦊 Yeni veriler toplanıyor..."):
+    """New data collection process"""
+    with st.spinner("🦊 Collecting new data..."):
         try:
-            # URL ve parametreleri al
+            # Get URL and parameters
             business_url = st.session_state.get('business_url', '')
             business_name = st.session_state.get('business_name', '')
             text_reviews = st.session_state.get('text_reviews', 5)
             total_reviews = st.session_state.get('total_reviews', 10)
             
             if not business_url or not business_name:
-                st.error("❌ İşletme adı ve URL'si gerekli!")
+                st.error("❌ Business name and URL are required!")
                 return False
             
-            # Scraper'ı başlat
+            # Initialize scraper
             scraper = DatabaseGoogleMapsScraper(headless=True, db_path="reviews.db")
             
-            # Veri topla
+            # Collect data
             result = scraper.extract_reviews_with_database(
                 business_name=business_name,
                 business_url=business_url,
@@ -196,64 +196,64 @@ def run_new_scraper():
             if result and result.get("success", False):
                 total_reviews = result.get("total_reviews", 0)
                 text_reviews = result.get("text_reviews", 0)
-                st.success(f"✅ Veriler başarıyla veritabanına kaydedildi!")
-                st.info(f"📊 Toplam: {total_reviews} yorum, Metin: {text_reviews} yorum")
-                # Sayfayı yenile
+                st.success(f"✅ Data successfully saved to database!")
+                st.info(f"📊 Total: {total_reviews} reviews, Text: {text_reviews} reviews")
+                # Refresh page
                 st.rerun()
                 return True
             else:
-                error_msg = result.get("error", "Bilinmeyen hata") if result else "İşlem başarısız"
-                st.error(f"❌ Veri toplama işlemi başarısız: {error_msg}")
+                error_msg = result.get("error", "Unknown error") if result else "Operation failed"
+                st.error(f"❌ Data collection failed: {error_msg}")
                 return False
                 
         except Exception as e:
-            st.error(f"❌ Hata: {str(e)}")
+            st.error(f"❌ Error: {str(e)}")
             return False
 
 def main():
-    """Ana dashboard fonksiyonu"""
+    """Main dashboard function"""
     
-    # Ana başlık
+    # Main header
     st.markdown("""
     <div class="main-header">
-        <h1>💾 Google Maps Yorumları - Veritabanı Dashboard</h1>
-        <p>SQLite veritabanından gerçek zamanlı analiz</p>
+        <h1>💾 Google Maps Reviews - Database Dashboard</h1>
+        <p>Real-time analysis from SQLite database</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Sidebar - Veri yönetimi
+    # Sidebar - Data management
     with st.sidebar:
-        st.markdown("## 🎯 Veri Yönetimi")
+        st.markdown("## 🎯 Data Management")
         
-        # Veritabanı durumu
+        # Database status
         df, stats = load_data_from_database()
         
         if df is not None and not df.empty:
-            st.success(f"✅ Veritabanında {len(df)} yorum bulundu")
+            st.success(f"✅ Found {len(df)} reviews in database")
             
-            # İstatistikler
-            st.markdown("### 📊 Genel İstatistikler")
+            # Statistics
+            st.markdown("### 📊 General Statistics")
             col1, col2 = st.columns(2)
             
             with col1:
-                st.metric("Toplam Yorum", stats.get('total_reviews', 0))
-                st.metric("Ortalama Puan", f"{stats.get('average_rating', 0):.1f}")
+                st.metric("Total Reviews", stats.get('total_reviews', 0))
+                st.metric("Average Rating", f"{stats.get('average_rating', 0):.1f}")
             
             with col2:
-                st.metric("Metin Yorumu", stats.get('text_reviews', 0))
-                st.metric("İşletme Sayısı", stats.get('total_businesses', 1))
+                st.metric("Text Reviews", stats.get('text_reviews', 0))
+                st.metric("Business Count", stats.get('total_businesses', 1))
             
         else:
-            st.warning("⚠️ Veritabanında henüz veri yok")
+            st.warning("⚠️ No data in database yet")
         
         st.markdown("---")
         
-        # Yeni veri toplama
-        st.markdown("### 🚀 Yeni Veri Topla")
+        # New data collection
+        st.markdown("### 🚀 Collect New Data")
         
         business_name = st.text_input(
-            "İşletme Adı:",
-            value="İstanbul Sabiha Gökçen Uluslararası Havalimanı",
+            "Business Name:",
+            value="Istanbul Sabiha Gokcen International Airport",
             key="business_name"
         )
         
@@ -266,95 +266,95 @@ def main():
         
         col1, col2 = st.columns(2)
         with col1:
-            text_reviews = st.number_input("Metin Yorumu:", min_value=1, max_value=50, value=5, key="text_reviews")
+            text_reviews = st.number_input("Text Reviews:", min_value=1, max_value=50, value=5, key="text_reviews")
         with col2:
-            total_reviews = st.number_input("Toplam Hedef:", min_value=1, max_value=100, value=10, key="total_reviews")
+            total_reviews = st.number_input("Total Target:", min_value=1, max_value=100, value=10, key="total_reviews")
         
-        if st.button("🦊 Veri Topla", type="primary"):
+        if st.button("🦊 Collect Data", type="primary"):
             run_new_scraper()
         
         st.markdown("---")
         
-        # Veritabanı yenile
-        if st.button("🔄 Verileri Yenile"):
+        # Refresh database
+        if st.button("🔄 Refresh Data"):
             st.rerun()
     
-    # Ana içerik
+    # Main content
     if df is None or df.empty:
-        st.warning("📭 Henüz veri bulunmuyor. Lütfen sidebar'dan yeni veri toplayın.")
+        st.warning("📭 No data available yet. Please collect new data from the sidebar.")
         return
     
-    # Zaman parsing'i ekle
+    # Add time parsing
     df['timestamp_parsed'] = df['date_original'].apply(parse_relative_time_to_timestamp)
     df['time_category'] = df['timestamp_parsed'].apply(categorize_timestamp)
     
-    # 🎯 İŞLETME FİLTRELEME SİSTEMİ
-    st.markdown("## 🏢 İşletme Seçimi")
+    # 🎯 BUSINESS FILTERING SYSTEM
+    st.markdown("## 🏢 Business Selection")
     
-    # İşletme listesi ve istatistikleri
+    # Business list and statistics
     business_stats = df.groupby('business_name').agg({
         'reviewer_name': 'count',
         'rating': 'mean',
         'review_text': lambda x: sum(1 for text in x if text and len(str(text).strip()) > 10)
     }).round(2)
-    business_stats.columns = ['Toplam Yorum', 'Ortalama Puan', 'Metin Yorumu']
+    business_stats.columns = ['Total Reviews', 'Average Rating', 'Text Reviews']
     
-    # İşletme seçimi
+    # Business selection
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        businesses = ["Tüm İşletmeler"] + list(df['business_name'].unique())
+        businesses = ["All Businesses"] + list(df['business_name'].unique())
         selected_business = st.selectbox(
-            "🎯 İşletme Seçin:",
+            "🎯 Select Business:",
             businesses,
             index=0,
-            help="Analiz etmek istediğiniz işletmeyi seçin"
+            help="Select the business you want to analyze"
         )
     
     with col2:
-        if selected_business != "Tüm İşletmeler":
+        if selected_business != "All Businesses":
             business_data = business_stats.loc[selected_business]
             st.info(f"""
             **{selected_business}**
-            - 📊 {int(business_data['Toplam Yorum'])} yorum
-            - ⭐ {business_data['Ortalama Puan']:.1f} puan
-            - 💬 {int(business_data['Metin Yorumu'])} metin yorumu
+            - 📊 {int(business_data['Total Reviews'])} reviews
+            - ⭐ {business_data['Average Rating']:.1f} rating
+            - 💬 {int(business_data['Text Reviews'])} text reviews
             """)
     
-    # İşletme istatistik tablosu (tüm işletmeler için)
-    if selected_business == "Tüm İşletmeler":
-        st.markdown("### 📋 İşletme Karşılaştırması")
+    # Business statistics table (for all businesses)
+    if selected_business == "All Businesses":
+        st.markdown("### 📋 Business Comparison")
         
         # Styled DataFrame
         styled_df = business_stats.style.format({
-            'Ortalama Puan': '{:.1f}',
-            'Toplam Yorum': '{:.0f}',
-            'Metin Yorumu': '{:.0f}'
-        }).background_gradient(subset=['Ortalama Puan'], cmap='RdYlGn')
+            'Average Rating': '{:.1f}',
+            'Total Reviews': '{:.0f}',
+            'Text Reviews': '{:.0f}'
+        }).background_gradient(subset=['Average Rating'], cmap='RdYlGn')
         
         st.dataframe(styled_df, use_container_width=True)
     
-    # Veriyi filtrele
-    if selected_business != "Tüm İşletmeler":
+    # Filter data
+    if selected_business != "All Businesses":
         df = df[df['business_name'] == selected_business]
-        st.success(f"✅ {selected_business} için {len(df)} yorum gösteriliyor")
+        st.success(f"✅ Showing {len(df)} reviews for {selected_business}")
     else:
-        st.info(f"📊 Tüm işletmeler için {len(df)} yorum gösteriliyor")
+        st.info(f"📊 Showing {len(df)} reviews for all businesses")
     
     st.markdown("---")
     
-    # Sekme yapısı
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Genel Bakış", "📈 Zaman Analizi", "💬 Yorum Detayları", "☁️ WordCloud"])
+    # Tab structure
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "📈 Time Analysis", "💬 Review Details", "☁️ WordCloud"])
     
     with tab1:
-        st.markdown("## 📊 Genel Bakış")
+        st.markdown("## 📊 Overview")
         
-        # Ana metrikler
+        # Main metrics
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.metric(
-                "Toplam Yorum",
+                "Total Reviews",
                 len(df),
                 delta=None
             )
@@ -362,7 +362,7 @@ def main():
         with col2:
             avg_rating = df['rating'].mean() if 'rating' in df.columns else 0
             st.metric(
-                "Ortalama Puan",
+                "Average Rating",
                 f"{avg_rating:.1f}/5",
                 delta=None
             )
@@ -370,31 +370,31 @@ def main():
         with col3:
             text_reviews = len(df[df['review_text'].notna() & (df['review_text'] != '')])
             st.metric(
-                "Metin Yorumu",
+                "Text Reviews",
                 text_reviews,
                 delta=f"{(text_reviews/len(df)*100):.1f}%"
             )
         
         with col4:
-            recent_count = len(df[df['time_category'].isin(['Bugün', 'Dün'])])
+            recent_count = len(df[df['time_category'].isin(['Today', 'Yesterday'])])
             st.metric(
-                "Son Yorumlar",
+                "Recent Reviews",
                 recent_count,
                 delta=f"{(recent_count/len(df)*100):.1f}%"
             )
         
-        # Puan dağılımı
+        # Rating distribution
         if 'rating' in df.columns:
             col1, col2 = st.columns(2)
             
             with col1:
-                st.markdown("### ⭐ Puan Dağılımı")
+                st.markdown("### ⭐ Rating Distribution")
                 rating_counts = df['rating'].value_counts().sort_index()
                 
                 fig = px.bar(
                     x=rating_counts.index,
                     y=rating_counts.values,
-                    labels={'x': 'Puan', 'y': 'Yorum Sayısı'},
+                    labels={'x': 'Rating', 'y': 'Review Count'},
                     color=rating_counts.values,
                     color_continuous_scale='viridis'
                 )
@@ -402,33 +402,33 @@ def main():
                 st.plotly_chart(fig, use_container_width=True, key="rating_dist_overview")
             
             with col2:
-                st.markdown("### 📊 Zaman Kategorisi Dağılımı")
+                st.markdown("### 📊 Time Category Distribution")
                 time_cats = df['time_category'].value_counts()
                 
                 fig = px.pie(
                     values=time_cats.values,
                     names=time_cats.index,
-                    title="Yorumlar Zaman Bazında",
+                    title="Reviews by Time",
                     color_discrete_sequence=px.colors.qualitative.Set3
                 )
                 fig.update_layout(height=400)
                 st.plotly_chart(fig, use_container_width=True, key="time_dist_overview")
     
     with tab2:
-        st.markdown("## 📈 Zaman Analizi")
+        st.markdown("## 📈 Time Analysis")
         
-        # Zaman kategorisi dağılımı
+        # Time category distribution
         time_cats = df['time_category'].value_counts()
         
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("### 🕒 Zaman Dağılımı")
+            st.markdown("### 🕒 Time Distribution")
             
             fig = px.bar(
                 x=time_cats.index,
                 y=time_cats.values,
-                labels={'x': 'Zaman Kategorisi', 'y': 'Yorum Sayısı'},
+                labels={'x': 'Time Category', 'y': 'Review Count'},
                 color=time_cats.values,
                 color_continuous_scale='plasma'
             )
@@ -436,9 +436,9 @@ def main():
             st.plotly_chart(fig, use_container_width=True, key="time_dist_analysis")
         
         with col2:
-            st.markdown("### 📅 Günlük Trend")
+            st.markdown("### 📅 Daily Trend")
             
-            # Günlük yorum sayısı
+            # Daily review count
             df['date'] = df['timestamp_parsed'].dt.date
             daily_counts = df.groupby('date').size().reset_index(name='count')
             
@@ -446,15 +446,15 @@ def main():
                 daily_counts,
                 x='date',
                 y='count',
-                title='Günlük Yorum Sayısı',
+                title='Daily Review Count',
                 markers=True
             )
             fig.update_layout(height=400)
             st.plotly_chart(fig, use_container_width=True, key="daily_trend_analysis")
         
-        # Zaman ve puan korelasyonu
+        # Time and rating correlation
         if 'rating' in df.columns:
-            st.markdown("### ⏰ Zaman vs Puan Analizi")
+            st.markdown("### ⏰ Time vs Rating Analysis")
             
             time_rating = df.groupby('time_category')['rating'].agg(['mean', 'count']).reset_index()
             
@@ -463,7 +463,7 @@ def main():
             fig.add_trace(go.Bar(
                 x=time_rating['time_category'],
                 y=time_rating['mean'],
-                name='Ortalama Puan',
+                name='Average Rating',
                 yaxis='y',
                 marker_color='lightblue'
             ))
@@ -472,72 +472,72 @@ def main():
                 x=time_rating['time_category'],
                 y=time_rating['count'],
                 mode='lines+markers',
-                name='Yorum Sayısı',
+                name='Review Count',
                 yaxis='y2',
                 marker_color='red'
             ))
             
             fig.update_layout(
-                title='Zaman Kategorilerine Göre Puan ve Yorum Sayısı',
-                xaxis_title='Zaman Kategorisi',
-                yaxis=dict(title='Ortalama Puan', side='left'),
-                yaxis2=dict(title='Yorum Sayısı', side='right', overlaying='y'),
+                title='Rating and Review Count by Time Category',
+                xaxis_title='Time Category',
+                yaxis=dict(title='Average Rating', side='left'),
+                yaxis2=dict(title='Review Count', side='right', overlaying='y'),
                 height=500
             )
             
             st.plotly_chart(fig, use_container_width=True, key="time_rating_correlation")
     
     with tab3:
-        st.markdown("## 💬 Yorum Detayları")
+        st.markdown("## 💬 Review Details")
         
-        # Filtreler (İşletme filtresi ana sistemde olduğu için kaldırıldı)
+        # Filters (Business filter removed as it's in main system)
         col1, col2, col3 = st.columns(3)
         
         with col1:
             selected_rating = st.selectbox(
-                "Puan Filtresi:",
-                ["Tümü"] + sorted(df['rating'].unique()) if 'rating' in df.columns else ["Tümü"],
+                "Rating Filter:",
+                ["All"] + sorted(df['rating'].unique()) if 'rating' in df.columns else ["All"],
                 key="rating_filter_details"
             )
         
         with col2:
             selected_time = st.selectbox(
-                "Zaman Filtresi:",
-                ["Tümü"] + list(df['time_category'].unique()),
+                "Time Filter:",
+                ["All"] + list(df['time_category'].unique()),
                 key="time_filter_details"
             )
         
         with col3:
             show_only_text = st.checkbox(
-                "Sadece metin yorumları",
+                "Only text reviews",
                 value=False,
                 key="text_only_filter"
             )
         
-        # Filtreleme
+        # Filtering
         filtered_df = df.copy()
         
-        if selected_rating != "Tümü":
+        if selected_rating != "All":
             filtered_df = filtered_df[filtered_df['rating'] == selected_rating]
         
-        if selected_time != "Tümü":
+        if selected_time != "All":
             filtered_df = filtered_df[filtered_df['time_category'] == selected_time]
         
         if show_only_text:
             filtered_df = filtered_df[filtered_df['review_text'].notna() & (filtered_df['review_text'] != '')]
         
-        st.markdown(f"### 📝 Filtrelenmiş Yorumlar ({len(filtered_df)} adet)")
+        st.markdown(f"### 📝 Filtered Reviews ({len(filtered_df)} items)")
         
-        # Yorumları göster
+        # Display reviews
         for idx, review in filtered_df.head(10).iterrows():
-            reviewer_name = review.get('reviewer_name', 'Anonim')
+            reviewer_name = review.get('reviewer_name', 'Anonymous')
             rating = review.get('rating', 'N/A')
-            date_original = review.get('date_original', 'Tarih bilinmiyor')
+            date_original = review.get('date_original', 'Date unknown')
             review_text = review.get('review_text', '')
-            time_category = review.get('time_category', 'Bilinmiyor')
+            time_category = review.get('time_category', 'Unknown')
             timestamp_parsed = review.get('timestamp_parsed', '')
             
-            # Güvenli metin oluşturma
+            # Safe text creation
             reviewer_name_safe = str(reviewer_name).replace('<', '&lt;').replace('>', '&gt;')
             review_text_safe = str(review_text).replace('<', '&lt;').replace('>', '&gt;')
             
@@ -551,7 +551,7 @@ def main():
                 except:
                     formatted_date = str(timestamp_parsed)
             
-            # Yorum kartı oluştur
+            # Create review card
             with st.container():
                 st.markdown(f"""
                 <div style="
@@ -563,7 +563,7 @@ def main():
                     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
                 ">
                     <h4 style="margin: 0 0 10px 0; color: #FFE066;">
-                        👤 {reviewer_name_safe} • ⭐ {rating} yıldız
+                        👤 {reviewer_name_safe} • ⭐ {rating} stars
                     </h4>
                     <p style="margin: 5px 0; opacity: 0.8; font-size: 14px;">
                         📅 {date_original} • 🕒 {formatted_date} • 📊 {time_category}
@@ -574,21 +574,21 @@ def main():
                 </div>
                 """, unsafe_allow_html=True)
         
-        # Toplam yorum sayısını göster
+        # Show total review count
         if len(filtered_df) > 10:
-            st.info(f"📊 Toplam {len(filtered_df)} yorum var. Yukarıda ilk 10 tanesi gösteriliyor.")
+            st.info(f"📊 Total {len(filtered_df)} reviews available. Showing first 10 above.")
     
     with tab4:
-        st.markdown("## ☁️ WordCloud Analizi")
+        st.markdown("## ☁️ WordCloud Analysis")
         
-        # Metin yorumlarını al
+        # Get text reviews
         text_reviews = df[df['review_text'].notna() & (df['review_text'] != '')]
         
         if len(text_reviews) > 0:
-            # Tüm yorumları birleştir
+            # Combine all reviews
             all_text = ' '.join(text_reviews['review_text'].astype(str))
             
-            # Türkçe stop words
+            # Turkish stop words
             turkish_stopwords = {
                 've', 'bir', 'bu', 'da', 'de', 'ki', 'ile', 'için', 'olan', 'olan',
                 'var', 'yok', 'çok', 'daha', 'en', 'ama', 'fakat', 'lakin', 'ancak',
@@ -596,7 +596,7 @@ def main():
             }
             
             try:
-                # WordCloud oluştur
+                # Create WordCloud
                 wordcloud = WordCloud(
                     width=800,
                     height=400,
@@ -606,39 +606,39 @@ def main():
                     colormap='viridis'
                 ).generate(all_text)
                 
-                # Matplotlib ile göster
+                # Display with Matplotlib
                 fig, ax = plt.subplots(figsize=(12, 6))
                 ax.imshow(wordcloud, interpolation='bilinear')
                 ax.axis('off')
-                ax.set_title('En Sık Kullanılan Kelimeler', fontsize=16, pad=20)
+                ax.set_title('Most Frequently Used Words', fontsize=16, pad=20)
                 
                 st.pyplot(fig, clear_figure=True)
                 
-                # En sık kullanılan kelimeler
+                # Most frequently used words
                 words = all_text.lower().split()
                 word_freq = Counter([word for word in words if len(word) > 2 and word not in turkish_stopwords])
                 
                 if word_freq:
-                    st.markdown("### 🔤 En Sık Kullanılan Kelimeler")
+                    st.markdown("### 🔤 Most Frequently Used Words")
                     
                     top_words = word_freq.most_common(20)
-                    words_df = pd.DataFrame(top_words, columns=['Kelime', 'Sıklık'])
+                    words_df = pd.DataFrame(top_words, columns=['Word', 'Frequency'])
                     
                     fig = px.bar(
                         words_df,
-                        x='Sıklık',
-                        y='Kelime',
+                        x='Frequency',
+                        y='Word',
                         orientation='h',
-                        title='Top 20 Kelime'
+                        title='Top 20 Words'
                     )
                     fig.update_layout(height=600)
                     st.plotly_chart(fig, use_container_width=True, key="word_frequency")
                 
             except Exception as e:
-                st.error(f"WordCloud oluşturulurken hata: {str(e)}")
+                st.error(f"Error creating WordCloud: {str(e)}")
         
         else:
-            st.warning("⚠️ WordCloud için yeterli metin yorumu bulunmuyor.")
+            st.warning("⚠️ Not enough text reviews for WordCloud.")
 
 if __name__ == "__main__":
     main()
