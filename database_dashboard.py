@@ -124,12 +124,12 @@ def analyze_reviews_with_ai(reviews_text, business_name, time_period):
         try:
             # New API style
             client = genai.Client(api_key=api_key)
-            model_name = "gemini-2.0-flash-exp"
+            model_name = "gemini-2.0-flash"
         except AttributeError:
             # Old API style fallback
             genai.configure(api_key=api_key)
             client = genai
-            model_name = "gemini-1.5-flash"
+            model_name = "gemini-2.0-flash"
         
         # Create analysis prompt
         prompt = f"""
@@ -280,6 +280,15 @@ def run_api_collector():
     """Collect data via Google Maps API"""
     with st.spinner("🚀 Collecting data via Google Maps API..."):
         try:
+            # Load API key from environment
+            load_dotenv()
+            api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+            
+            if not api_key:
+                st.error("❌ GOOGLE_MAPS_API_KEY not found in .env file!")
+                st.info("💡 Please add your API key to .env file:\nGOOGLE_MAPS_API_KEY=your_key_here")
+                return False
+            
             # Get Place ID and business name
             place_id = st.session_state.get('place_id', '')
             business_name = st.session_state.get('business_name', '')
@@ -289,8 +298,8 @@ def run_api_collector():
                 st.info("💡 Place ID example: ChIJqZW8Cvb_n0ARBuUkyCzgDDg")
                 return False
             
-            # Initialize API collector
-            collector = GoogleMapsAPICollector()
+            # Initialize API collector with API key
+            collector = GoogleMapsAPICollector(api_key=api_key)
             
             # Collect reviews
             result = collector.collect_reviews(place_id, business_name)
@@ -321,17 +330,22 @@ def run_api_collector():
                         # Calculate time category
                         time_category = categorize_timestamp(timestamp_obj) if timestamp_obj else "Unknown"
                         
-                        # Add new review with proper timestamp fields
-                        db.add_review(
-                            business_name=business_name,
-                            reviewer_name=review.author_name,
-                            rating=review.rating,
-                            review_text=review.text or "",
-                            date_original=review.relative_time,
-                            timestamp_parsed=timestamp_obj.isoformat() if timestamp_obj else None,
-                            time_category=time_category,
-                            review_hash=review_hash
-                        )
+                        # Prepare review data dictionary with correct field names
+                        review_data = {
+                            'business_name': business_name,
+                            'business_url': review.author_url if hasattr(review, 'author_url') else '',
+                            'reviewer_name': review.author_name,
+                            'rating': review.rating,
+                            'review_date': review.relative_time,  # date_original expects 'review_date' key
+                            'review_text': review.text or "",
+                            'timestamp_parsed': timestamp_obj.isoformat() if timestamp_obj else None,
+                            'time_category': time_category,
+                            'session_id': f'dashboard_collection_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+                            'review_hash': review_hash
+                        }
+                        
+                        # Add new review with dictionary
+                        db.add_review(review_data)
                         new_count += 1
                     else:
                         duplicate_count += 1
@@ -428,6 +442,145 @@ def main():
                     st.session_state['place_id'] = pid
                     st.session_state['business_name'] = bname
                     run_api_collector()
+        
+        st.markdown("---")
+        
+        # Auto-Scheduler Section (Background Service)
+        st.markdown("### ⏰ Background Auto Scheduler")
+        st.caption("Independent service - collects reviews every 30 minutes")
+        
+        # Import background scheduler
+        from background_scheduler import BackgroundScheduler
+        import json
+        
+        # Load scheduler status from file
+        scheduler_status = {}
+        if os.path.exists('scheduler_status.json'):
+            try:
+                with open('scheduler_status.json', 'r') as f:
+                    scheduler_status = json.load(f)
+            except:
+                scheduler_status = {'active': False}
+        
+        # Scheduler controls
+        scheduler = BackgroundScheduler()
+        col_sch1, col_sch2 = st.columns(2)
+        
+        with col_sch1:
+            if not scheduler_status.get('active', False):
+                if st.button("▶️ Start Background Scheduler", type="primary", key="start_scheduler"):
+                    scheduler.start()
+                    st.success("✅ Background scheduler started!")
+                    st.rerun()
+            else:
+                if st.button("⏸️ Stop Background Scheduler", type="secondary", key="stop_scheduler"):
+                    scheduler.stop()
+                    st.info("⏸️ Background scheduler stopped")
+                    st.rerun()
+        
+        with col_sch2:
+            if scheduler_status.get('active', False):
+                st.success("✅ Running")
+            else:
+                st.info("⏸️ Stopped")
+        
+        # Show scheduler status from file
+        if scheduler_status.get('active', False):
+            st.markdown("**📊 Scheduler Status:**")
+            
+            # Status metrics in columns
+            col_s1, col_s2, col_s3 = st.columns(3)
+            
+            with col_s1:
+                total_runs = scheduler_status.get('total_collections', 0)
+                st.metric("Total Runs", total_runs)
+            
+            with col_s2:
+                last_result = scheduler_status.get('last_result', {})
+                if last_result:
+                    new_reviews = last_result.get('new_reviews', 0)
+                    st.metric("Last Collection", f"{new_reviews} new")
+            
+            with col_s3:
+                if last_result:
+                    duplicates = last_result.get('duplicates', 0)
+                    st.metric("Duplicates", duplicates)
+            
+            # Last run time
+            last_run = scheduler_status.get('last_run')
+            if last_run:
+                try:
+                    last_dt = datetime.fromisoformat(last_run)
+                    st.caption(f"🕒 Last run: {last_dt.strftime('%d %b %H:%M:%S')}")
+                except:
+                    st.caption(f"🕒 Last run: {last_run}")
+            
+            # Next run countdown
+            next_run = scheduler_status.get('next_run')
+            if next_run:
+                try:
+                    next_time = datetime.fromisoformat(next_run)
+                    now = datetime.now()
+                    time_left = (next_time - now).total_seconds()
+                    
+                    if time_left > 0:
+                        minutes_left = int(time_left // 60)
+                        seconds_left = int(time_left % 60)
+                        st.caption(f"⏳ Next in: {minutes_left}m {seconds_left}s")
+                        
+                        # Progress bar
+                        progress = 1 - (time_left / (30 * 60))
+                        st.progress(max(0, min(1, progress)))
+                    else:
+                        st.caption("⏰ Collection in progress...")
+                except:
+                    pass
+            
+            # Show recent logs
+            st.markdown("**📝 Recent Activity:**")
+            logs = scheduler_status.get('logs', [])
+            
+            if logs:
+                # Show last 5 logs in expander
+                with st.expander("View Activity Log", expanded=False):
+                    # Reverse to show newest first
+                    for log in reversed(logs[-10:]):
+                        timestamp = log.get('timestamp', '')
+                        level = log.get('level', 'info')
+                        message = log.get('message', '')
+                        
+                        # Format timestamp
+                        try:
+                            dt = datetime.fromisoformat(timestamp)
+                            time_str = dt.strftime('%H:%M:%S')
+                        except:
+                            time_str = timestamp
+                        
+                        # Icon based on level
+                        icon = {
+                            'info': 'ℹ️',
+                            'success': '✅',
+                            'error': '❌',
+                            'warning': '⚠️'
+                        }.get(level, 'ℹ️')
+                        
+                        st.caption(f"{icon} `{time_str}` {message}")
+            else:
+                st.caption("No activity yet")
+            
+            # Info box
+            st.info("""
+**💡 Background Scheduler:**
+- ✓ Runs independently (doesn't need dashboard open)
+- ✓ Collects reviews every 30 minutes
+- ✓ Saves to database automatically
+- ✓ View logs to see what's happening
+            """)
+        
+        # Manual refresh button for status
+        if scheduler_status.get('active', False):
+            if st.button("🔄 Update Status", key="update_scheduler", help="Refresh scheduler status"):
+                st.rerun()
         
         st.markdown("---")
         
@@ -563,89 +716,318 @@ def main():
             
             with col2:
                 st.markdown("### 📊 Time Category Distribution")
-                time_cats = df['time_category'].value_counts()
+                st.caption("Reviews by time period (based on actual review timestamp)")
+                
+                # Filter and order time categories
+                df_time_overview = df[df['timestamp_parsed'].notna()].copy()
+                time_cats = df_time_overview['time_category'].value_counts()
                 
                 fig = px.pie(
                     values=time_cats.values,
                     names=time_cats.index,
-                    title="Reviews by Time",
-                    color_discrete_sequence=px.colors.qualitative.Set3
+                    color_discrete_sequence=px.colors.qualitative.Set3,
+                    hole=0.3
                 )
-                fig.update_layout(height=400)
+                fig.update_traces(
+                    textposition='inside',
+                    textinfo='percent+label',
+                    hovertemplate='<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
+                )
+                fig.update_layout(height=400, showlegend=True)
                 st.plotly_chart(fig, use_container_width=True, key="time_dist_overview")
     
     with tab2:
         st.markdown("## 📈 Time Analysis")
         
-        # Time category distribution
-        time_cats = df['time_category'].value_counts()
+        # Filter out rows with null timestamp_parsed
+        df_with_time = df[df['timestamp_parsed'].notna()].copy()
         
-        col1, col2 = st.columns(2)
+        if len(df_with_time) == 0:
+            st.warning("⚠️ No timestamp data available for time analysis.")
+        else:
+            # Time category distribution with proper ordering
+            time_category_order = [
+                'Last Hour', 'Today', 'Yesterday', 'This Week', 
+                'This Month', 'Last 3 Months', 'Last 6 Months', 
+                'This Year', 'Older', 'Unknown'
+            ]
+            
+            time_cats = df_with_time['time_category'].value_counts()
+            # Reindex with proper order (only existing categories)
+            existing_cats = [cat for cat in time_category_order if cat in time_cats.index]
+            time_cats = time_cats.reindex(existing_cats, fill_value=0)
+            
+            # Show both timeline and category views
+            st.markdown("### 📊 Time Distribution Views")
+            
+            view_type = st.radio(
+                "Select View:",
+                ["📈 Timeline (Actual Timestamps)", "📁 Categories (Grouped)"],
+                horizontal=True,
+                key="time_view_selector"
+            )
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if view_type == "📈 Timeline (Actual Timestamps)":
+                    st.markdown("#### 🕒 Reviews Timeline Distribution")
+                    st.caption("Reviews distributed across actual timestamps")
+                    
+                    # Create histogram based on actual timestamps
+                    fig = px.histogram(
+                        df_with_time,
+                        x='timestamp_parsed',
+                        nbins=20,
+                        labels={'timestamp_parsed': 'Review Timestamp', 'count': 'Number of Reviews'},
+                        color_discrete_sequence=['#667eea']
+                    )
+                    fig.update_traces(
+                        hovertemplate='<b>Period:</b> %{x|%d %b %Y}<br><b>Reviews:</b> %{y}<extra></extra>'
+                    )
+                    fig.update_layout(
+                        height=400, 
+                        showlegend=False,
+                        xaxis_title='Review Timestamp',
+                        yaxis_title='Number of Reviews',
+                        bargap=0.1,
+                        xaxis=dict(tickangle=-45)
+                    )
+                    st.plotly_chart(fig, use_container_width=True, key="time_dist_analysis")
+                else:
+                    st.markdown("#### 📁 Time Category Distribution")
+                    st.caption("Reviews grouped by time periods")
+                    
+                    # Reindex with proper order (only existing categories)
+                    existing_cats = [cat for cat in time_category_order if cat in time_cats.index]
+                    time_cats_ordered = time_cats.reindex(existing_cats, fill_value=0)
+                    
+                    fig = px.bar(
+                        x=time_cats_ordered.index,
+                        y=time_cats_ordered.values,
+                        labels={'x': 'Time Category', 'y': 'Review Count'},
+                        color=time_cats_ordered.values,
+                        color_continuous_scale='plasma',
+                        text=time_cats_ordered.values
+                    )
+                    fig.update_traces(textposition='outside')
+                    fig.update_layout(
+                        height=400, 
+                        showlegend=False,
+                        xaxis_title='Time Period',
+                        yaxis_title='Number of Reviews',
+                        xaxis_tickangle=-45
+                    )
+                    st.plotly_chart(fig, use_container_width=True, key="time_cat_analysis")
+            
+            with col2:
+                st.markdown("### 📅 Daily Review Trend")
+                st.caption("Number of reviews per day (based on actual review timestamp)")
+                
+                # Daily review count based on timestamp_parsed
+                df_with_time['date'] = df_with_time['timestamp_parsed'].dt.date
+                daily_counts = df_with_time.groupby('date').size().reset_index(name='count')
+                daily_counts = daily_counts.sort_values('date')
+                
+                # Format dates properly for display
+                daily_counts['date_formatted'] = pd.to_datetime(daily_counts['date']).dt.strftime('%d %b %Y')
+                
+                fig = px.line(
+                    daily_counts,
+                    x='date',
+                    y='count',
+                    markers=True,
+                    text='count',
+                    hover_data={'date': False, 'count': True}
+                )
+                fig.update_traces(
+                    textposition='top center',
+                    line=dict(width=3, color='#667eea'),
+                    marker=dict(size=10),
+                    hovertemplate='<b>Date:</b> %{x|%d %b %Y}<br><b>Reviews:</b> %{y}<extra></extra>'
+                )
+                fig.update_layout(
+                    height=400,
+                    xaxis_title='Date',
+                    yaxis_title='Number of Reviews',
+                    hovermode='x unified',
+                    xaxis=dict(
+                        tickformat='%d %b',
+                        tickangle=-45
+                    )
+                )
+                st.plotly_chart(fig, use_container_width=True, key="daily_trend_analysis")
         
-        with col1:
-            st.markdown("### 🕒 Time Distribution")
+            # Rating over time (scatter plot)
+            if 'rating' in df_with_time.columns:
+                st.markdown("### ⭐ Rating Trend Over Time")
+                st.caption("How ratings changed over time (each point is a review)")
+                
+                col_a, col_b = st.columns(2)
+                
+                with col_a:
+                    # Scatter plot of ratings over time
+                    fig = px.scatter(
+                        df_with_time.sort_values('timestamp_parsed'),
+                        x='timestamp_parsed',
+                        y='rating',
+                        color='rating',
+                        color_continuous_scale='RdYlGn',
+                        hover_data={'timestamp_parsed': '|%d %b %Y %H:%M', 'rating': True},
+                        labels={'timestamp_parsed': 'Review Time', 'rating': 'Rating'}
+                    )
+                    fig.update_traces(
+                        marker=dict(size=10, line=dict(width=1, color='white')),
+                        hovertemplate='<b>Time:</b> %{x|%d %b %Y %H:%M}<br><b>Rating:</b> %{y} ⭐<extra></extra>'
+                    )
+                    fig.update_layout(
+                        height=400,
+                        yaxis=dict(tickmode='linear', tick0=1, dtick=1, range=[0, 6]),
+                        xaxis=dict(tickangle=-45)
+                    )
+                    st.plotly_chart(fig, use_container_width=True, key="rating_scatter_time")
+                
+                with col_b:
+                    # Moving average of ratings
+                    df_sorted = df_with_time.sort_values('timestamp_parsed').copy()
+                    df_sorted['rating_ma'] = df_sorted['rating'].rolling(window=min(5, len(df_sorted)), center=True).mean()
+                    
+                    fig = go.Figure()
+                    
+                    # Individual ratings
+                    fig.add_trace(go.Scatter(
+                        x=df_sorted['timestamp_parsed'],
+                        y=df_sorted['rating'],
+                        mode='markers',
+                        name='Individual Ratings',
+                        marker=dict(size=8, color='lightgray', opacity=0.5),
+                        hovertemplate='<b>Time:</b> %{x|%d %b %Y %H:%M}<br><b>Rating:</b> %{y} ⭐<extra></extra>'
+                    ))
+                    
+                    # Moving average
+                    fig.add_trace(go.Scatter(
+                        x=df_sorted['timestamp_parsed'],
+                        y=df_sorted['rating_ma'],
+                        mode='lines',
+                        name='Trend (Moving Avg)',
+                        line=dict(width=3, color='#667eea'),
+                        hovertemplate='<b>Time:</b> %{x|%d %b %Y %H:%M}<br><b>Avg Rating:</b> %{y:.2f} ⭐<extra></extra>'
+                    ))
+                    
+                    fig.update_layout(
+                        height=400,
+                        yaxis=dict(title='Rating ⭐', tickmode='linear', tick0=1, dtick=1, range=[0, 6]),
+                        xaxis=dict(title='Review Time', tickangle=-45),
+                        hovermode='x unified',
+                        legend=dict(x=0.01, y=0.99)
+                    )
+                    st.plotly_chart(fig, use_container_width=True, key="rating_trend_time")
+            
+            # Hourly distribution
+            st.markdown("### 🕐 Hourly Review Distribution")
+            st.caption("Reviews by hour of day (based on actual review timestamp)")
+            
+            df_with_time['hour'] = df_with_time['timestamp_parsed'].dt.hour
+            hourly_counts = df_with_time.groupby('hour').size().reset_index(name='count')
+            
+            # Fill missing hours with 0
+            all_hours = pd.DataFrame({'hour': range(24)})
+            hourly_counts = all_hours.merge(hourly_counts, on='hour', how='left').fillna(0)
+            hourly_counts['count'] = hourly_counts['count'].astype(int)
+            hourly_counts['hour_label'] = hourly_counts['hour'].apply(lambda x: f'{x:02d}:00')
             
             fig = px.bar(
-                x=time_cats.index,
-                y=time_cats.values,
-                labels={'x': 'Time Category', 'y': 'Review Count'},
-                color=time_cats.values,
-                color_continuous_scale='plasma'
-            )
-            fig.update_layout(height=400, showlegend=False)
-            st.plotly_chart(fig, use_container_width=True, key="time_dist_analysis")
-        
-        with col2:
-            st.markdown("### 📅 Daily Trend")
-            
-            # Daily review count
-            df['date'] = df['timestamp_parsed'].dt.date
-            daily_counts = df.groupby('date').size().reset_index(name='count')
-            
-            fig = px.line(
-                daily_counts,
-                x='date',
+                hourly_counts,
+                x='hour',
                 y='count',
-                title='Daily Review Count',
-                markers=True
+                labels={'hour': 'Hour of Day', 'count': 'Review Count'},
+                color='count',
+                color_continuous_scale='viridis',
+                text='count',
+                hover_data={'hour': False, 'count': True}
             )
-            fig.update_layout(height=400)
-            st.plotly_chart(fig, use_container_width=True, key="daily_trend_analysis")
-        
-        # Time and rating correlation
-        if 'rating' in df.columns:
-            st.markdown("### ⏰ Time vs Rating Analysis")
-            
-            time_rating = df.groupby('time_category')['rating'].agg(['mean', 'count']).reset_index()
-            
-            fig = go.Figure()
-            
-            fig.add_trace(go.Bar(
-                x=time_rating['time_category'],
-                y=time_rating['mean'],
-                name='Average Rating',
-                yaxis='y',
-                marker_color='lightblue'
-            ))
-            
-            fig.add_trace(go.Scatter(
-                x=time_rating['time_category'],
-                y=time_rating['count'],
-                mode='lines+markers',
-                name='Review Count',
-                yaxis='y2',
-                marker_color='red'
-            ))
-            
+            fig.update_traces(
+                textposition='outside',
+                hovertemplate='<b>Hour:</b> %{x}:00<br><b>Reviews:</b> %{y}<extra></extra>'
+            )
             fig.update_layout(
-                title='Rating and Review Count by Time Category',
-                xaxis_title='Time Category',
-                yaxis=dict(title='Average Rating', side='left'),
-                yaxis2=dict(title='Review Count', side='right', overlaying='y'),
-                height=500
+                height=400,
+                xaxis=dict(
+                    tickmode='linear', 
+                    tick0=0, 
+                    dtick=2,
+                    tickformat='%02d:00'
+                ),
+                showlegend=False
             )
+            st.plotly_chart(fig, use_container_width=True, key="hourly_distribution")
             
-            st.plotly_chart(fig, use_container_width=True, key="time_rating_correlation")
+            # Weekly pattern (day of week)
+            st.markdown("### 📆 Weekly Pattern Analysis")
+            st.caption("Reviews by day of week (based on actual review timestamp)")
+            
+            df_with_time['day_of_week'] = df_with_time['timestamp_parsed'].dt.day_name()
+            df_with_time['day_of_week_num'] = df_with_time['timestamp_parsed'].dt.dayofweek
+            day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            
+            weekly_counts = df_with_time.groupby('day_of_week').size().reset_index(name='count')
+            weekly_counts['day_of_week'] = pd.Categorical(weekly_counts['day_of_week'], categories=day_order, ordered=True)
+            weekly_counts = weekly_counts.sort_values('day_of_week')
+            weekly_counts['day_short'] = weekly_counts['day_of_week'].apply(lambda x: x[:3])
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig = px.bar(
+                    weekly_counts,
+                    x='day_of_week',
+                    y='count',
+                    labels={'day_of_week': 'Day of Week', 'count': 'Review Count'},
+                    color='count',
+                    color_continuous_scale='blues',
+                    text='count'
+                )
+                fig.update_traces(
+                    textposition='outside',
+                    hovertemplate='<b>%{x}</b><br>Reviews: %{y}<extra></extra>'
+                )
+                fig.update_layout(
+                    height=400, 
+                    showlegend=False, 
+                    xaxis_tickangle=-45,
+                    xaxis_title='Day of Week',
+                    yaxis_title='Number of Reviews'
+                )
+                st.plotly_chart(fig, use_container_width=True, key="weekly_pattern")
+            
+            with col2:
+                # Average rating by day of week
+                if 'rating' in df_with_time.columns:
+                    weekly_rating = df_with_time.groupby('day_of_week')['rating'].agg(['mean', 'count']).reset_index()
+                    weekly_rating['day_of_week'] = pd.Categorical(weekly_rating['day_of_week'], categories=day_order, ordered=True)
+                    weekly_rating = weekly_rating.sort_values('day_of_week')
+                    
+                    fig = px.line(
+                        weekly_rating,
+                        x='day_of_week',
+                        y='mean',
+                        markers=True,
+                        labels={'day_of_week': 'Day of Week', 'mean': 'Average Rating'}
+                    )
+                    fig.update_traces(
+                        line=dict(width=3, color='#764ba2'),
+                        marker=dict(size=12),
+                        text=weekly_rating['mean'].round(2),
+                        textposition='top center',
+                        hovertemplate='<b>%{x}</b><br>Avg Rating: %{y:.2f} ⭐<br>Reviews: ' + 
+                                     weekly_rating['count'].astype(str) + '<extra></extra>'
+                    )
+                    fig.update_layout(
+                        height=400,
+                        yaxis=dict(range=[0, 5.5], title='Average Rating ⭐'),
+                        xaxis=dict(tickangle=-45, title='Day of Week')
+                    )
+                    st.plotly_chart(fig, use_container_width=True, key="weekly_rating")
     
     with tab3:
         st.markdown("## 💬 Review Details")

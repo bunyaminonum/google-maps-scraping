@@ -1,0 +1,12 @@
+{
+  "active": true,
+  "last_run": "2025-10-31T23:44:00.617717",
+  "next_run": "2025-11-01T00:14:00.617717",
+  "total_collections": 2,
+  "last_result": {
+    "success": true,
+    "new_reviews": 5,
+    "duplicates": 0,
+    "timestamp": "2025-10-31T23:44:00.617717"
+  }
+}
