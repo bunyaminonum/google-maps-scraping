@@ -25,6 +25,27 @@ pip install -r requirements.txt
 - webdriver-manager
 - pandas
 - beautifulsoup4
+- google-generativeai (for AI analysis)
+- python-dotenv (for API key management)
+
+### 🤖 Google Gemini API Setup (Optional - for AI Analysis)
+
+1. Get your free API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+
+2. Create a `.env` file in the project root:
+```bash
+cp .env.example .env
+```
+
+3. Add your API key to `.env`:
+```
+GEMINI_API_KEY=your_api_key_here
+```
+
+4. Test the API:
+```bash
+python gemini_test.py
+```
 
 ## 🚀 Usage
 
