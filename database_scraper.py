@@ -1,6 +1,6 @@
 """
-Veritabanı Entegrasyonlu Google Maps Review Scraper
-SQLite veritabanı ile tam entegrasyon
+Google Maps Review Scraper with Database Integration
+Full integration with SQLite database
 """
 
 import time
@@ -37,7 +37,7 @@ class Review:
     platform: str = "Google Maps"
 
 class DatabaseGoogleMapsScraper:
-    """Veritabanı entegrasyonlu Google Maps Review Scraper"""
+    """Google Maps Review Scraper with database integration"""
     
     def __init__(self, headless: bool = False, db_path: str = "reviews.db"):
         self.driver = None
@@ -45,22 +45,22 @@ class DatabaseGoogleMapsScraper:
         self.headless = headless
         self.reviews = []
         
-        # Veritabanı bağlantısı
+        # Database connection
         self.db = ReviewsDatabase(db_path)
         
-        # Türkçe zaman parser'ı
+        # Turkish time parser
         self.time_parser = TurkishTimeParser()
         
-        # İstatistikler
+        # Statistics
         self.scraped_count = 0
         self.text_review_count = 0
         self.rating_only_count = 0
         
-        print("✅ Veritabanı bağlantısı kuruldu")
+        print("✅ Database connection established")
 
     def setup_driver(self):
-        """Firefox WebDriver'ı kur"""
-        print("🦊 Firefox WebDriver kuruluyor...")
+        """Set up Firefox WebDriver"""
+        print("🦊 Setting up Firefox WebDriver...")
         
         try:
             options = Options()
@@ -68,7 +68,7 @@ class DatabaseGoogleMapsScraper:
             if self.headless:
                 options.add_argument("--headless")
             
-            # Performans iyileştirmeleri
+            # Performance improvements
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--disable-gpu")
@@ -79,43 +79,43 @@ class DatabaseGoogleMapsScraper:
             # User agent
             options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
             
-            # GeckoDriverManager ile otomatik driver yönetimi
+            # Automatic driver management with GeckoDriverManager
             service = Service(GeckoDriverManager().install())
             self.driver = webdriver.Firefox(service=service, options=options)
             
-            # Sayfa yükleme süresi
+            # Page load timeout
             self.driver.set_page_load_timeout(30)
             self.driver.implicitly_wait(10)
             
             # WebDriverWait
             self.wait = WebDriverWait(self.driver, 20)
             
-            print("✅ Firefox başlatıldı")
+            print("✅ Firefox started successfully")
             
         except Exception as e:
-            print(f"❌ WebDriver kurulum hatası: {e}")
+            print(f"❌ WebDriver setup error: {e}")
             raise
 
     def close_driver(self):
-        """WebDriver'ı kapat"""
+        """Close WebDriver"""
         if self.driver:
             self.driver.quit()
-            print("🔒 Firefox kapatıldı")
+            print("🔒 Firefox closed")
 
     def go_to_business_page(self, business_url: str = "", search_query: str = ""):
-        """İşletme sayfasına git"""
+        """Navigate to business page"""
         try:
             if business_url and business_url.startswith("http"):
-                print(f"🔗 Direkt URL'ye gidiliyor: {business_url[:50]}...")
+                print(f"🔗 Navigating to URL: {business_url[:50]}...")
                 self.driver.get(business_url)
-                print("✅ İşletme sayfasına gidildi")
+                print("✅ Navigated to business page")
                 return True
             
             elif search_query:
-                print(f"🔍 Google Maps'te aranıyor: {search_query}")
+                print(f"🔍 Searching on Google Maps: {search_query}")
                 self.driver.get("https://www.google.com/maps")
                 
-                # Arama kutusu
+                # Search box
                 search_box = self.wait.until(
                     EC.presence_of_element_located((By.ID, "searchboxinput"))
                 )
@@ -125,30 +125,30 @@ class DatabaseGoogleMapsScraper:
                 
                 time.sleep(3)
                 
-                # İlk sonuca tıkla
+                # Click first result
                 first_result = self.wait.until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, ".hfpxzc"))
                 )
                 first_result.click()
                 time.sleep(2)
                 
-                print("✅ İşletme sayfasına gidildi")
+                print("✅ Navigated to business page")
                 return True
             
             else:
-                print("❌ URL veya arama kelimesi sağlanmadı")
+                print("❌ No URL or search query provided")
                 return False
                 
         except Exception as e:
-            print(f"❌ Sayfa yükleme hatası: {e}")
+            print(f"❌ Page loading error: {e}")
             return False
 
     def go_to_reviews_tab(self):
-        """Yorumlar sekmesine git"""
-        print("📝 Yorumlar sekmesine gidiliyor...")
+        """Navigate to reviews tab"""
+        print("📝 Navigating to reviews tab...")
         
         try:
-            # Yorumlar tab'ını bul ve tıkla
+            # Find and click reviews tab
             reviews_tab_selectors = [
                 "button[role='tab'][aria-label*='yorumlar' i]",
                 "button[role='tab'][aria-label*='review' i]",
@@ -164,7 +164,7 @@ class DatabaseGoogleMapsScraper:
                         aria_label = element.get_attribute("aria-label") or ""
                         if "yorumlar" in aria_label.lower() or "review" in aria_label.lower():
                             reviews_tab = element
-                            print(f"✅ Yorumlar tab'ı bulundu: {selector} -> '{aria_label}'")
+                            print(f"✅ Reviews tab found: {selector} -> '{aria_label}'")
                             break
                     if reviews_tab:
                         break
@@ -172,25 +172,25 @@ class DatabaseGoogleMapsScraper:
                     continue
             
             if not reviews_tab:
-                print("❌ Yorumlar tab'ı bulunamadı")
+                print("❌ Reviews tab not found")
                 return False
             
-            # Tab'a tıkla
+            # Click tab
             self.driver.execute_script("arguments[0].click();", reviews_tab)
             time.sleep(3)
-            print("✅ Yorumlar tab'ı tıklandı")
+            print("✅ Reviews tab clicked")
             return True
             
         except Exception as e:
-            print(f"❌ Yorumlar tab hatası: {e}")
+            print(f"❌ Reviews tab error: {e}")
             return False
 
     def set_to_newest_reviews(self):
-        """En yeni yorumlar moduna geç"""
-        print("🔄 En yeni yorumlar durumu kontrol ediliyor...")
+        """Switch to newest reviews mode"""
+        print("🔄 Checking newest reviews status...")
         
         try:
-            # Dropdown butonunu bul
+            # Find dropdown button
             dropdown_selectors = [
                 "button[aria-label*='En alakalı']",
                 "button[aria-label*='Most relevant']",
@@ -207,7 +207,7 @@ class DatabaseGoogleMapsScraper:
                         text = element.get_attribute("aria-label") or element.text
                         if any(keyword in text.lower() for keyword in ['alakalı', 'relevant', 'sort']):
                             dropdown_button = element
-                            print(f"✅ Dropdown bulundu: {selector}")
+                            print(f"✅ Dropdown found: {selector}")
                             break
                     if dropdown_button:
                         break
@@ -215,29 +215,29 @@ class DatabaseGoogleMapsScraper:
                     continue
             
             if not dropdown_button:
-                print("⚠️ Sıralama dropdown'u bulunamadı, devam ediliyor...")
+                print("⚠️ Sort dropdown not found, continuing...")
                 return True
             
-            # Dropdown durumunu kontrol et
+            # Check dropdown status
             current_text = dropdown_button.get_attribute("aria-label") or dropdown_button.text
-            print(f"📋 Dropdown durumu: '{current_text}' (aria-label: '{dropdown_button.get_attribute('aria-label')}')")
+            print(f"📋 Dropdown status: '{current_text}' (aria-label: '{dropdown_button.get_attribute('aria-label')}')")
             
-            # Eğer zaten "En yeni" modunda ise, işlem yapmaya gerek yok
+            # If already in "Newest" mode, no need to change
             if "yeni" in current_text.lower() or "newest" in current_text.lower():
-                print("✅ Zaten en yeni yorumlar modunda")
+                print("✅ Already in newest reviews mode")
                 return True
             
-            # En alakalı'dan En yeni'ye geç
+            # Switch from "Most relevant" to "Newest"
             if "alakalı" in current_text.lower() or "relevant" in current_text.lower():
-                print("🔄 'En alakalı'dan 'En yeni'ye geçiliyor...")
+                print("🔄 Switching from 'Most relevant' to 'Newest'...")
                 
-                # Dropdown'u aç
+                # Open dropdown
                 self.driver.execute_script("arguments[0].click();", dropdown_button)
                 time.sleep(2)
-                print("✅ Dropdown açıldı")
+                print("✅ Dropdown opened")
                 
-                # "En yeni" seçeneğini bul ve tıkla
-                print("🎯 'En yeni' seçeneği aranıyor...")
+                # Find and click "Newest" option
+                print("🎯 Searching for 'Newest' option...")
                 newest_selectors = [
                     "[role='menuitemradio'][aria-label*='yeni' i]",
                     "[role='menuitemradio'][aria-label*='newest' i]",
@@ -265,17 +265,17 @@ class DatabaseGoogleMapsScraper:
                 if newest_option:
                     self.driver.execute_script("arguments[0].click();", newest_option)
                     time.sleep(3)
-                    print("✅ 'En yeni' başarıyla seçildi!")
+                    print("✅ 'Newest' selected successfully!")
                     return True
                 else:
-                    print("⚠️ 'En yeni' seçeneği bulunamadı, mevcut sıralama ile devam ediliyor")
+                    print("⚠️ 'Newest' option not found, continuing with current sorting")
                     return True
             
             return True
             
         except Exception as e:
-            print(f"❌ Sıralama değiştirme hatası: {e}")
-            print("⚠️ Mevcut sıralama ile devam ediliyor...")
+            print(f"❌ Sort change error: {e}")
+            print("⚠️ Continuing with current sorting...")
             return True
 
     def smart_scroll_and_load_reviews(self, target_count: int = 60):
@@ -482,36 +482,36 @@ class DatabaseGoogleMapsScraper:
     def extract_reviews_with_database(self, business_name: str, business_url: str = "", 
                                     search_query: str = "", target_text_reviews: int = 30, 
                                     target_ratings: int = 50):
-        """Yorumları çek ve veritabanına kaydet"""
+        """Extract reviews and save to database"""
         
-        print(f"📊 Hedef: {target_text_reviews} metin yorumu + {target_ratings} puanlama")
+        print(f"📊 Target: {target_text_reviews} text reviews + {target_ratings} ratings")
         print("=" * 60)
         
         if not self.driver:
             self.setup_driver()
         
-        # İşletme sayfasına git
+        # Navigate to business page
         if not self.go_to_business_page(business_url, search_query):
-            return {"success": False, "error": "Sayfa yüklenemedi"}
+            return {"success": False, "error": "Page could not be loaded"}
         
-        # Yorumlar sekmesine git
+        # Go to reviews tab
         if not self.go_to_reviews_tab():
-            return {"success": False, "error": "Yorumlar sekmesi açılamadı"}
+            return {"success": False, "error": "Reviews tab could not be opened"}
         
-        # En yeni yorumlar moduna geç
+        # Switch to newest reviews mode
         self.set_to_newest_reviews()
         
-        # Akıllı veri toplama
-        print("📊 Akıllı veri toplama başlıyor...")
-        print(f"🎯 Hedef: {target_text_reviews} metin yorumu + {target_ratings} puanlama")
+        # Smart data collection
+        print("📊 Smart data collection starting...")
+        print(f"🎯 Target: {target_text_reviews} text reviews + {target_ratings} ratings")
         
-        # Hedef yorum sayısını belirle (daha fazla scroll için)
+        # Determine target review count (for more scrolling)
         total_target = max(target_text_reviews + target_ratings, 60)
         
-        # Scroll ve yorum yükleme
-        print("📜 Yeterli veri yüklemek için akıllı scroll...")
+        # Scroll and load reviews
+        print("📜 Smart scroll to load sufficient data...")
         if not self.smart_scroll_and_load_reviews(total_target):
-            return {"success": False, "error": "Yorumlar yüklenemedi"}
+            return {"success": False, "error": "Reviews could not be loaded"}
         
         # Yorumları çek
         try:
