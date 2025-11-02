@@ -1,0 +1,7 @@
+{
+  "interval_minutes": 15,
+  "enabled_businesses": [
+    "İstanbul Havalimanı",
+    "İstanbul Sabiha Gökçen Havalimanı"
+  ]
+}

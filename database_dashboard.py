@@ -432,22 +432,39 @@ def main():
         
         st.markdown("---")
         
-        # Quick add from configured businesses
-        if BusinessConfig.BUSINESSES:
+        # Quick add from configured businesses (from database)
+        all_businesses_quick = BusinessConfig.get_all_businesses_from_db()
+        if all_businesses_quick:
             st.markdown("### ⚡ Quick Collect")
-            st.caption("Configured businesses:")
+            st.caption(f"All businesses ({len(all_businesses_quick)} total):")
             
-            for idx, (pid, bname) in enumerate(BusinessConfig.BUSINESSES):
+            for idx, (pid, bname) in enumerate(all_businesses_quick):
                 if st.button(f"📍 {bname}", key=f"quick_{idx}"):
-                    st.session_state['place_id'] = pid
-                    st.session_state['business_name'] = bname
-                    run_api_collector()
+                    # Use widget defaults to avoid session state conflicts
+                    st.session_state.quick_place_id = pid
+                    st.session_state.quick_business_name = bname
+                    # Trigger collection with these values
+                    with st.spinner(f"Collecting reviews from {bname}..."):
+                        try:
+                            load_dotenv()
+                            api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+                            if api_key:
+                                collector = GoogleMapsAPICollector(api_key=api_key)
+                                result = collector.collect_reviews(pid, bname)
+                                if result and result.get('success'):
+                                    st.success(f"✅ {result.get('total_reviews', 0)} reviews collected!")
+                                else:
+                                    st.error("❌ Collection failed")
+                            else:
+                                st.error("❌ API key not found")
+                        except Exception as e:
+                            st.error(f"❌ Error: {str(e)}")
+                    st.rerun()
         
         st.markdown("---")
         
         # Auto-Scheduler Section (Background Service)
         st.markdown("### ⏰ Background Auto Scheduler")
-        st.caption("Independent service - collects reviews every 30 minutes")
         
         # Import background scheduler
         from background_scheduler import BackgroundScheduler
@@ -462,8 +479,107 @@ def main():
             except:
                 scheduler_status = {'active': False}
         
-        # Scheduler controls
+        # Initialize scheduler
         scheduler = BackgroundScheduler()
+        current_config = scheduler.get_config()
+        
+        # ⚙️ Configuration Section
+        with st.expander("⚙️ Scheduler Settings", expanded=not scheduler_status.get('active', False)):
+            st.markdown("**Configure Collection Behavior:**")
+            
+            # Interval selection
+            col_int1, col_int2 = st.columns([2, 1])
+            with col_int1:
+                interval_options = {
+                    15: "⚡ Fast - Every 15 minutes",
+                    30: "⚖️ Balanced - Every 30 minutes",
+                    60: "🕐 Hourly - Every hour",
+                    120: "🕑 Slow - Every 2 hours",
+                    180: "🕒 Very Slow - Every 3 hours"
+                }
+                selected_interval = st.selectbox(
+                    "Collection Interval",
+                    options=list(interval_options.keys()),
+                    format_func=lambda x: interval_options[x],
+                    index=list(interval_options.keys()).index(current_config.get('interval_minutes', 30)),
+                    key="scheduler_interval"
+                )
+            
+            with col_int2:
+                st.metric("Interval", f"{selected_interval} min")
+            
+            # Business selection
+            st.markdown("**Select Businesses to Monitor:**")
+            
+            # Get all available businesses from database (includes manual additions)
+            all_businesses = BusinessConfig.get_all_businesses_from_db()
+            business_names = [name for _, name in all_businesses]
+            
+            if business_names:
+                # Current enabled businesses
+                current_enabled = current_config.get('enabled_businesses', [])
+                
+                # Select all / none buttons
+                col_sel1, col_sel2, col_sel3 = st.columns(3)
+                with col_sel1:
+                    select_all = st.button("✅ Select All", key="select_all_biz")
+                with col_sel2:
+                    select_none = st.button("❌ Clear All", key="select_none_biz")
+                with col_sel3:
+                    st.caption(f"{len(current_enabled) if current_enabled else len(business_names)} selected")
+                
+                # Handle select all/none
+                if select_all:
+                    current_enabled = business_names.copy()
+                elif select_none:
+                    current_enabled = []
+                
+                # Multi-select for businesses
+                selected_businesses = st.multiselect(
+                    "Businesses",
+                    options=business_names,
+                    default=current_enabled if current_enabled else business_names,
+                    key="scheduler_businesses",
+                    help="Leave empty to collect from all businesses"
+                )
+            else:
+                st.warning("⚠️ No businesses configured in settings")
+                selected_businesses = []
+            
+            # Save button
+            st.markdown("---")
+            col_save1, col_save2 = st.columns([1, 2])
+            with col_save1:
+                save_config = st.button("💾 Save Settings", type="primary", key="save_scheduler_config")
+            
+            with col_save2:
+                if scheduler_status.get('active', False):
+                    st.caption("⚠️ Settings will apply on next run")
+                else:
+                    st.caption("✅ Ready to save")
+            
+            # Save configuration
+            if save_config:
+                new_config = {
+                    'interval_minutes': selected_interval,
+                    'enabled_businesses': selected_businesses
+                }
+                
+                if scheduler.save_config(new_config):
+                    st.success(f"✅ Saved! Interval: {selected_interval} min, Businesses: {len(selected_businesses) if selected_businesses else 'All'}")
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to save configuration")
+            
+            # Show current config summary
+            st.info(f"""
+**Current Settings:**
+- 📊 Interval: {current_config.get('interval_minutes', 30)} minutes
+- 🏢 Businesses: {len(current_config.get('enabled_businesses', [])) if current_config.get('enabled_businesses') else 'All'}
+            """)
+        
+        # Scheduler controls
+        st.markdown("---")
         col_sch1, col_sch2 = st.columns(2)
         
         with col_sch1:
@@ -528,8 +644,9 @@ def main():
                         seconds_left = int(time_left % 60)
                         st.caption(f"⏳ Next in: {minutes_left}m {seconds_left}s")
                         
-                        # Progress bar
-                        progress = 1 - (time_left / (30 * 60))
+                        # Progress bar (use configured interval)
+                        interval_seconds = current_config.get('interval_minutes', 30) * 60
+                        progress = 1 - (time_left / interval_seconds)
                         st.progress(max(0, min(1, progress)))
                     else:
                         st.caption("⏰ Collection in progress...")

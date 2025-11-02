@@ -8,5 +8,17 @@
     "new_reviews": 5,
     "duplicates": 0,
     "timestamp": "2025-10-31T23:44:00.617717"
-  }
+  },
+  "logs": [
+    {
+      "timestamp": "2025-11-01T00:31:35.527779",
+      "level": "info",
+      "message": "\u2699\ufe0f Config updated: 15 min, 1 businesses"
+    },
+    {
+      "timestamp": "2025-11-01T00:45:27.248280",
+      "level": "info",
+      "message": "\u2699\ufe0f Config updated: 15 min, 2 businesses"
+    }
+  ]
 }

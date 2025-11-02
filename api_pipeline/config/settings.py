@@ -81,6 +81,55 @@ class BusinessConfig:
         ]
     
     @classmethod
+    def get_all_businesses_from_db(cls, db_path: str = None) -> List[tuple]:
+        """Get all unique businesses from database"""
+        import sqlite3
+        
+        if db_path is None:
+            db_path = Config.DATABASE_PATH
+        
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Get unique businesses with their place_ids
+            # Use GROUP BY to get only one entry per business_name
+            # Prefer place_ids that start with 'ChIJ' (real Google place IDs)
+            cursor.execute("""
+                SELECT 
+                    CASE 
+                        WHEN business_url LIKE 'ChIJ%' THEN business_url
+                        ELSE (SELECT business_url FROM reviews r2 
+                              WHERE r2.business_name = reviews.business_name 
+                              AND r2.business_url LIKE 'ChIJ%' LIMIT 1)
+                    END as place_id,
+                    business_name
+                FROM reviews 
+                WHERE business_name IS NOT NULL 
+                AND business_name != ''
+                GROUP BY business_name
+                ORDER BY business_name
+            """)
+            
+            businesses = cursor.fetchall()
+            conn.close()
+            
+            # Merge with static list
+            all_businesses = list(cls.BUSINESSES)
+            
+            # Add database businesses that aren't in static list
+            existing_names = {name for _, name in all_businesses}
+            for place_id, name in businesses:
+                if name not in existing_names:
+                    all_businesses.append((place_id or '', name))
+            
+            return all_businesses
+            
+        except Exception as e:
+            print(f"Error loading businesses from DB: {e}")
+            return cls.BUSINESSES
+    
+    @classmethod
     def get_place_ids(cls) -> List[str]:
         """Get list of place IDs"""
         return [pid for pid, _ in cls.BUSINESSES]

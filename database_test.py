@@ -187,11 +187,14 @@ class ReviewsDatabase:
     
     def add_review(self, review_data):
         """Add single review with duplicate check (for scraper compatibility)"""
+        # Get date field (try both review_date and date_original for compatibility)
+        date_field = review_data.get('review_date') or review_data.get('date_original', '')
+        
         # Generate hash for duplicate check
         review_hash = self.generate_review_hash(
             review_data.get('business_name', ''),
             review_data.get('reviewer_name', ''),
-            review_data.get('review_date', ''),
+            date_field,
             review_data.get('review_text', '')
         )
         
