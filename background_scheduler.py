@@ -145,10 +145,23 @@ class BackgroundScheduler:
                 ]
             
             for place_id, business_name in businesses:
+                self.add_log(f"📍 Collecting: {business_name} (Place ID: {place_id[:20]}...)", 'info')
+                
+                # Validate Place ID
+                if not place_id or not place_id.startswith('ChIJ'):
+                    error_msg = f"❌ Invalid Place ID for {business_name}: {place_id}"
+                    self.add_log(error_msg, 'error')
+                    print(error_msg)
+                    continue
+                
                 result = collector.collect_reviews(place_id, business_name)
                 
                 if result and result.get('success'):
                     reviews = result.get('reviews', [])
+                    self.add_log(f"  📥 Received {len(reviews)} reviews from API", 'info')
+                    
+                    business_new = 0
+                    business_duplicates = 0
                     
                     for review in reviews:
                         # Generate hash
@@ -180,11 +193,21 @@ class BackgroundScheduler:
                             }
                             
                             db.add_review(review_data)
+                            business_new += 1
                             total_new += 1
-                            self.add_log(f"  ✅ New review from {review.author_name}", 'info')
                         else:
+                            business_duplicates += 1
                             total_duplicates += 1
-                            # Don't log duplicates to avoid spam
+                    
+                    # Log business summary
+                    summary = f"  ✅ {business_name}: {business_new} new, {business_duplicates} duplicates"
+                    self.add_log(summary, 'success')
+                else:
+                    # Log API failure
+                    error = result.get('error', 'Unknown error') if result else 'No response'
+                    error_msg = f"  ❌ {business_name}: API failed - {error}"
+                    self.add_log(error_msg, 'error')
+                    print(error_msg)
             
             return {
                 'success': True,
@@ -201,19 +224,21 @@ class BackgroundScheduler:
             }
     
     def _categorize_timestamp(self, timestamp):
-        """Categorize timestamp into time periods"""
+        """Categorize timestamp into time periods with correct timezone handling"""
         try:
-            now = datetime.now()
+            import pytz
+            tr_tz = pytz.timezone('Europe/Istanbul')
+            now = datetime.now(tr_tz)
             
-            # Make timezone naive for comparison
-            if timestamp.tzinfo is not None:
-                timestamp = timestamp.replace(tzinfo=None)
+            # Make timestamp timezone-aware if naive
+            if timestamp.tzinfo is None:
+                timestamp = tr_tz.localize(timestamp)
             
             diff = now - timestamp
             
-            if diff.total_seconds() < 3600:
+            if diff.total_seconds() < 3600:  # Less than 1 hour
                 return "Last Hour"
-            elif diff.days == 0:
+            elif diff.days == 0:  # Same day but more than 1 hour ago
                 return "Today"
             elif diff.days == 1:
                 return "Yesterday"
@@ -278,39 +303,70 @@ class BackgroundScheduler:
     
     def start(self):
         """Start the scheduler in background"""
+        # Check if already running
         if self.thread and self.thread.is_alive():
             print("⚠️  Scheduler already running")
+            self.add_log("⚠️ Start requested but already running", 'warning')
             return False
         
         # Reload config before starting
         self.config = self.load_config()
         interval = self.config.get('interval_minutes', self.DEFAULT_INTERVAL)
         
+        print(f"🚀 Starting scheduler (interval: {interval} min)...")
+        
+        # Clear stop event and update status
         self.stop_event.clear()
         self.status['active'] = True
         self.status['next_run'] = (datetime.now() + timedelta(minutes=interval)).isoformat()
         self.save_status()
         
+        # Start the thread
         self.thread = Thread(target=self.run_loop, daemon=True)
         self.thread.start()
         
-        print(f"✅ Scheduler started in background (interval: {interval} min)")
-        return True
+        # Give it a moment to start
+        time.sleep(0.5)
+        
+        if self.thread.is_alive():
+            print(f"✅ Scheduler started successfully in background")
+            self.add_log(f"✅ Scheduler started (interval: {interval} min)", 'success')
+            return True
+        else:
+            print("❌ Failed to start scheduler thread")
+            self.add_log("❌ Failed to start scheduler thread", 'error')
+            self.status['active'] = False
+            self.save_status()
+            return False
     
     def stop(self):
         """Stop the scheduler"""
-        if not self.thread or not self.thread.is_alive():
-            print("⚠️  Scheduler not running")
-            return False
-        
-        self.stop_event.set()
-        self.thread.join(timeout=5)
-        
+        # Always update status file first
         self.status['active'] = False
         self.status['next_run'] = None
         self.save_status()
         
-        print("✅ Scheduler stopped")
+        if not self.thread or not self.thread.is_alive():
+            print("⚠️  Scheduler not running (status file updated)")
+            self.add_log("⏹️ Scheduler stopped (was not running)", 'info')
+            return True  # Return True since we updated the status
+        
+        print("🛑 Stopping scheduler...")
+        self.add_log("🛑 Stopping scheduler...", 'info')
+        
+        # Signal the thread to stop
+        self.stop_event.set()
+        
+        # Wait for thread to finish (with timeout)
+        self.thread.join(timeout=3)
+        
+        if self.thread.is_alive():
+            print("⚠️  Scheduler thread did not stop gracefully (force stopped)")
+            self.add_log("⚠️ Scheduler force stopped", 'warning')
+        else:
+            print("✅ Scheduler stopped gracefully")
+            self.add_log("✅ Scheduler stopped gracefully", 'success')
+        
         return True
     
     def get_status(self):

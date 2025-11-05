@@ -20,6 +20,7 @@ from api_pipeline.collectors.google_maps_api import GoogleMapsAPICollector
 from api_pipeline.config.settings import Config, BusinessConfig
 import pytz
 import os
+import time
 from dotenv import load_dotenv
 
 # Gemini AI import (conditional - only if needed)
@@ -78,6 +79,26 @@ st.markdown("""
     padding-left: 12px;
     padding-right: 12px;
 }
+
+/* Pulse animation for "in progress" indicator */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Smooth transitions */
+.stButton button {
+    transition: all 0.3s ease;
+}
+
+.stButton button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -101,8 +122,9 @@ def load_data_from_database(db_path="reviews.db"):
         st.error(f"❌ Error loading database: {str(e)}")
         return None, None
 
-def analyze_reviews_with_ai(reviews_text, business_name, time_period):
-    """Analyze reviews using Gemini AI"""
+def analyze_reviews_with_ai(reviews_text, business_name, time_period, custom_instructions=None, 
+                           rating_filter=None, sentiment_filter=None, min_text_length=None):
+    """Analyze reviews using Gemini AI with context-aware prompts based on filters"""
     if not GEMINI_AVAILABLE:
         return {
             "error": "Gemini AI is not available. Please install: pip install google-generativeai",
@@ -131,41 +153,184 @@ def analyze_reviews_with_ai(reviews_text, business_name, time_period):
             client = genai
             model_name = "gemini-2.0-flash"
         
-        # Create analysis prompt
+        # Build filter context for AI
+        filter_context = []
+        
+        if time_period and time_period != 'All':
+            filter_context.append(f"📅 Time Period: {time_period} - Focus on RECENT trends and current customer experience")
+        
+        if rating_filter and rating_filter != 'All':
+            filter_context.append(f"⭐ Rating Filter: {rating_filter} stars - These reviews specifically rated {rating_filter}/5")
+        
+        if sentiment_filter and sentiment_filter != 'All':
+            if 'Positive' in sentiment_filter:
+                filter_context.append(f"😊 Sentiment: POSITIVE reviews only (4-5★) - Analyze what makes customers HAPPY and what they PRAISE")
+            elif 'Negative' in sentiment_filter:
+                filter_context.append(f"😞 Sentiment: NEGATIVE reviews only (1-2★) - Focus on PROBLEMS, COMPLAINTS, and URGENT ISSUES that need attention")
+            elif 'Neutral' in sentiment_filter:
+                filter_context.append(f"😐 Sentiment: NEUTRAL reviews (3★) - Identify areas that are OKAY but could be IMPROVED")
+        
+        if min_text_length and min_text_length > 10:
+            filter_context.append(f"📝 Text Filter: Minimum {min_text_length} characters - Only detailed reviews included")
+        
+        filter_section = ""
+        if filter_context:
+            filter_section = f"""
+
+⚙️ **ANALYSIS CONTEXT - FILTERS APPLIED:**
+{chr(10).join([f"   {fc}" for fc in filter_context])}
+
+🎯 **IMPORTANT:** Your analysis should be SPECIFICALLY TAILORED to these filters.
+- If analyzing POSITIVE reviews: Focus on strengths, what works well, success patterns
+- If analyzing NEGATIVE reviews: Focus on problems, complaints, urgent fixes needed
+- If analyzing specific time period: Mention trends for THAT period
+- If analyzing specific rating: Explain what makes customers give THAT rating
+"""
+        
+        # Build custom instructions section
+        custom_section = ""
+        if custom_instructions and custom_instructions.strip():
+            custom_section = f"""
+
+✍️ **USER'S CUSTOM INSTRUCTIONS:**
+{custom_instructions.strip()}
+
+👉 Please prioritize these specific instructions in your analysis.
+"""
+        
+        # Build smart prompt based on filters
+        if sentiment_filter and 'Negative' in sentiment_filter:
+            analysis_focus = """
+1. **Critical Issues Identified** ⚠️
+   - List URGENT problems mentioned by unhappy customers
+   - Severity assessment (Critical/High/Medium)
+   - Frequency of each complaint
+
+2. **Root Causes Analysis** 🔍
+   - Why are customers giving 1-2 stars?
+   - Common patterns in complaints
+   - Systemic vs isolated issues
+
+3. **Impact on Customer Experience** 💔
+   - How these issues affect overall satisfaction
+   - Emotional tone of complaints
+   - Trust and reputation concerns
+
+4. **Actionable Solutions** ✅
+   - Specific recommendations to fix each issue
+   - Quick wins vs long-term improvements
+   - Priority ranking
+
+5. **Comparison Context** 📊
+   - Are issues getting worse or better over time?
+   - Most frustrated customer segments
+
+6. **Executive Summary** 📋
+   - Top 3 urgent actions needed
+   - Risk assessment
+"""
+        elif sentiment_filter and 'Positive' in sentiment_filter:
+            analysis_focus = """
+1. **Key Success Factors** 🌟
+   - What are customers praising most?
+   - Unique selling points mentioned
+   - Exceeded expectations
+
+2. **Customer Delight Moments** 😊
+   - Standout positive experiences
+   - Emotional highlights
+   - Word-of-mouth triggers
+
+3. **Competitive Advantages** 💪
+   - What sets this business apart?
+   - Strengths to double down on
+   - Brand differentiators
+
+4. **Best Practices Identified** ✨
+   - Patterns in excellent service
+   - Successful processes
+   - Staff behaviors that work
+
+5. **Growth Opportunities** 🚀
+   - How to amplify what works
+   - Expansion suggestions
+   - Marketing insights
+
+6. **Executive Summary** 📋
+   - Top 3 strengths to maintain
+   - Success patterns to scale
+"""
+        else:
+            analysis_focus = """
+1. **Overall Sentiment Analysis** 📊
+   - Positive/Negative/Neutral percentage breakdown
+   - Emotional tone and customer mood
+   - Satisfaction trends
+
+2. **Key Themes & Topics** 🏷️
+   - Top 5-7 most mentioned themes
+   - For each theme: Positive ✅ Negative ❌ or Mixed ⚖️
+   - Theme importance ranking
+
+3. **Strengths & Wins** 💪
+   - Top 3-5 things customers love
+   - Competitive advantages
+   - Consistent praise patterns
+
+4. **Issues & Pain Points** ⚠️
+   - Top 3-5 complaints and problems
+   - Urgency level of each issue
+   - Impact on customer satisfaction
+
+5. **Customer Behavior Insights** 🧠
+   - Usage patterns and preferences
+   - Customer segment observations
+   - Behavioral trends
+
+6. **Actionable Recommendations** 🎯
+   - Specific improvement suggestions
+   - Quick wins vs strategic changes
+   - Priority actions
+
+7. **Executive Summary** 📋
+   - 3-4 sentence overview
+   - Key takeaways
+   - Strategic direction
+"""
+        
+        # Create intelligent, context-aware prompt
         prompt = f"""
-You are analyzing customer reviews for: {business_name}
-Time period: {time_period}
-Number of reviews: {len(reviews_text)} reviews
+🎯 **CUSTOMER REVIEW ANALYSIS TASK**
 
-Reviews to analyze:
-{chr(10).join(reviews_text[:50])}  # Analyze first 50 reviews
+📍 **Business:** {business_name}
+📅 **Time Period:** {time_period}
+📊 **Sample Size:** {len(reviews_text)} reviews
+{filter_section}
+{custom_section}
 
-Please provide a comprehensive analysis in the following format:
+---
 
-1. **Overall Sentiment**
-   - Positive/Negative/Mixed percentage breakdown
-   - General mood of customers
+📝 **REVIEWS TO ANALYZE:**
 
-2. **Key Themes** (Top 5-7 themes mentioned)
-   - List the most frequently mentioned topics
-   - For each theme, indicate if it's positive or negative
+{chr(10).join([f"{i+1}. {review}" for i, review in enumerate(reviews_text)])}
 
-3. **Strengths** (Top 3-5)
-   - What customers love most
-   - Most praised aspects
+---
 
-4. **Areas for Improvement** (Top 3-5)
-   - Common complaints
-   - Issues that need attention
+🔍 **YOUR ANALYSIS SHOULD INCLUDE:**
+{analysis_focus}
 
-5. **Customer Insights**
-   - Patterns in customer behavior
-   - Recommendations based on feedback
+---
 
-6. **Summary**
-   - Brief executive summary (2-3 sentences)
+⚡ **ANALYSIS GUIDELINES:**
+- Be SPECIFIC: Use exact quotes from reviews when relevant
+- Be ACTIONABLE: Provide concrete recommendations, not generic advice
+- Be CONTEXTUAL: Remember the filters applied (time, rating, sentiment)
+- Be BALANCED: Even in filtered data, note any counter-patterns
+- Be INSIGHTFUL: Go beyond surface-level observations
+- Use EMOJIS and formatting for clarity
+- Provide PERCENTAGES and NUMBERS when possible
 
-Please provide the analysis in clear, structured format with bullet points.
+📌 Start your analysis now:
 """
         
         # Generate analysis (support both API styles)
@@ -252,18 +417,22 @@ def parse_relative_time_to_timestamp(relative_time_str):
         return datetime.now(tr_tz)
 
 def categorize_timestamp(timestamp):
-    """Categorize timestamp into time periods"""
+    """Categorize timestamp into time periods with detailed granularity"""
     try:
         tr_tz = pytz.timezone('Europe/Istanbul')
         now = datetime.now(tr_tz)
         
-        # Make timestamp timezone-aware
+        # Make timestamp timezone-aware if naive
         if timestamp.tzinfo is None:
             timestamp = tr_tz.localize(timestamp)
         
+        # Calculate difference
         diff = now - timestamp
         
-        if diff.days == 0:
+        # Detailed categorization matching filter options
+        if diff.total_seconds() < 3600:  # Less than 1 hour
+            return "Last Hour"
+        elif diff.days == 0:  # Same day but more than 1 hour ago
             return "Today"
         elif diff.days == 1:
             return "Yesterday"
@@ -271,9 +440,15 @@ def categorize_timestamp(timestamp):
             return "This Week"
         elif diff.days <= 30:
             return "This Month"
+        elif diff.days <= 90:
+            return "Last 3 Months"
+        elif diff.days <= 180:
+            return "Last 6 Months"
+        elif diff.days <= 365:
+            return "This Year"
         else:
             return "Older"
-    except:
+    except Exception as e:
         return "Time Unknown"
 
 def run_api_collector():
@@ -333,7 +508,7 @@ def run_api_collector():
                         # Prepare review data dictionary with correct field names
                         review_data = {
                             'business_name': business_name,
-                            'business_url': review.author_url if hasattr(review, 'author_url') else '',
+                            'business_url': place_id,  # Store Place ID here for future reference
                             'reviewer_name': review.author_name,
                             'rating': review.rating,
                             'review_date': review.relative_time,  # date_original expects 'review_date' key
@@ -406,6 +581,123 @@ def main():
         
         st.markdown("---")
         
+        # Business Management Section
+        st.markdown("### 🏢 Business Management")
+        
+        db = ReviewsDatabase("reviews.db")
+        
+        # Quick stats
+        all_biz = db.get_all_businesses(enabled_only=False)
+        enabled_count = sum(1 for b in all_biz if b['enabled'])
+        disabled_count = len(all_biz) - enabled_count
+        
+        col_stat1, col_stat2 = st.columns(2)
+        with col_stat1:
+            st.metric("Total", len(all_biz))
+        with col_stat2:
+            st.metric("Enabled", enabled_count, delta=f"-{disabled_count} disabled" if disabled_count > 0 else None)
+        
+        # Tabs for different operations
+        business_tab1, business_tab2 = st.tabs(["📋 List", "➕ Add New"])
+        
+        with business_tab1:
+            # List all businesses
+            all_businesses_crud = db.get_all_businesses()
+            
+            if all_businesses_crud:
+                st.caption(f"Total: {len(all_businesses_crud)} businesses")
+                
+                for biz in all_businesses_crud:
+                    with st.expander(f"{'✅' if biz['enabled'] else '❌'} {biz['name']}", expanded=False):
+                        st.caption(f"**Place ID:** `{biz['place_id']}`")
+                        st.caption(f"**Status:** {'Enabled' if biz['enabled'] else 'Disabled'}")
+                        st.caption(f"**ID:** {biz['id']}")
+                        
+                        # Action buttons
+                        col_edit1, col_edit2, col_edit3 = st.columns(3)
+                        
+                        with col_edit1:
+                            if st.button("🔄 Toggle", key=f"toggle_{biz['id']}", help="Enable/Disable"):
+                                result = db.toggle_business(biz['id'])
+                                if result['success']:
+                                    st.success(result['message'])
+                                    time.sleep(0.5)
+                                    st.rerun()
+                                else:
+                                    st.error(result['error'])
+                        
+                        with col_edit2:
+                            if st.button("✏️ Edit", key=f"edit_{biz['id']}", help="Edit business"):
+                                st.session_state[f'editing_{biz["id"]}'] = True
+                                st.rerun()
+                        
+                        with col_edit3:
+                            if st.button("🗑️ Delete", key=f"delete_{biz['id']}", help="Delete business"):
+                                result = db.delete_business(biz['id'])
+                                if result['success']:
+                                    st.success(result['message'])
+                                    time.sleep(0.5)
+                                    st.rerun()
+                                else:
+                                    st.error(result['error'])
+                        
+                        # Edit form (if editing)
+                        if st.session_state.get(f'editing_{biz["id"]}', False):
+                            st.markdown("**Edit Business:**")
+                            
+                            new_name = st.text_input("Name", value=biz['name'], key=f"edit_name_{biz['id']}")
+                            new_place_id = st.text_input("Place ID", value=biz['place_id'], key=f"edit_place_{biz['id']}")
+                            
+                            col_save, col_cancel = st.columns(2)
+                            
+                            with col_save:
+                                if st.button("💾 Save", key=f"save_{biz['id']}"):
+                                    result = db.update_business(
+                                        biz['id'],
+                                        name=new_name if new_name != biz['name'] else None,
+                                        place_id=new_place_id if new_place_id != biz['place_id'] else None
+                                    )
+                                    if result['success']:
+                                        st.success(result['message'])
+                                        st.session_state[f'editing_{biz["id"]}'] = False
+                                        time.sleep(0.5)
+                                        st.rerun()
+                                    else:
+                                        st.error(result['error'])
+                            
+                            with col_cancel:
+                                if st.button("❌ Cancel", key=f"cancel_{biz['id']}"):
+                                    st.session_state[f'editing_{biz["id"]}'] = False
+                                    st.rerun()
+            else:
+                st.info("No businesses yet. Add one in the 'Add New' tab.")
+        
+        with business_tab2:
+            # Add new business form
+            st.markdown("**Add New Business:**")
+            
+            new_biz_name = st.text_input("Business Name", key="new_biz_name", placeholder="e.g., Starbucks")
+            new_biz_place_id = st.text_input("Google Place ID", key="new_biz_place_id", placeholder="ChIJ...")
+            
+            st.caption("💡 Get Place ID from: [Place ID Finder](https://developers.google.com/maps/documentation/places/web-service/place-id)")
+            
+            if st.button("➕ Add Business", type="primary", key="add_new_business"):
+                if new_biz_name and new_biz_place_id:
+                    if new_biz_place_id.startswith('ChIJ'):
+                        result = db.add_business(new_biz_name, new_biz_place_id, enabled=True)
+                        if result['success']:
+                            st.success(f"✅ {new_biz_name} added successfully!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {result['error']}")
+                    else:
+                        st.error("❌ Place ID must start with 'ChIJ'")
+                else:
+                    st.warning("⚠️ Please fill in both fields")
+        
+        st.markdown("---")
+        
         # API data collection
         st.markdown("### 🚀 Collect Data via API")
         
@@ -433,17 +725,19 @@ def main():
         st.markdown("---")
         
         # Quick add from configured businesses (from database)
+        # Force refresh from database each time to show new additions
         all_businesses_quick = BusinessConfig.get_all_businesses_from_db()
+        
         if all_businesses_quick:
             st.markdown("### ⚡ Quick Collect")
             st.caption(f"All businesses ({len(all_businesses_quick)} total):")
             
+            # Show last update time
+            st.caption(f"🔄 Updated: {datetime.now().strftime('%H:%M:%S')}")
+            
             for idx, (pid, bname) in enumerate(all_businesses_quick):
                 if st.button(f"📍 {bname}", key=f"quick_{idx}"):
-                    # Use widget defaults to avoid session state conflicts
-                    st.session_state.quick_place_id = pid
-                    st.session_state.quick_business_name = bname
-                    # Trigger collection with these values
+                    # Trigger collection
                     with st.spinner(f"Collecting reviews from {bname}..."):
                         try:
                             load_dotenv()
@@ -451,14 +745,52 @@ def main():
                             if api_key:
                                 collector = GoogleMapsAPICollector(api_key=api_key)
                                 result = collector.collect_reviews(pid, bname)
+                                
                                 if result and result.get('success'):
-                                    st.success(f"✅ {result.get('total_reviews', 0)} reviews collected!")
+                                    # Save to database
+                                    db = ReviewsDatabase("reviews.db")
+                                    reviews = result.get('reviews', [])
+                                    
+                                    new_count = 0
+                                    dup_count = 0
+                                    
+                                    for review in reviews:
+                                        review_hash = db.generate_review_hash(
+                                            bname, review.author_name, review.relative_time, review.text or ""
+                                        )
+                                        
+                                        if not db.check_review_exists(review_hash):
+                                            timestamp_obj = review.timestamp if hasattr(review, 'timestamp') else None
+                                            time_category = categorize_timestamp(timestamp_obj) if timestamp_obj else "Unknown"
+                                            
+                                            review_data = {
+                                                'business_name': bname,
+                                                'business_url': pid,  # Store Place ID
+                                                'reviewer_name': review.author_name,
+                                                'rating': review.rating,
+                                                'review_date': review.relative_time,
+                                                'review_text': review.text or "",
+                                                'timestamp_parsed': timestamp_obj.isoformat() if timestamp_obj else None,
+                                                'time_category': time_category,
+                                                'session_id': f'quick_collect_{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+                                                'review_hash': review_hash
+                                            }
+                                            db.add_review(review_data)
+                                            new_count += 1
+                                        else:
+                                            dup_count += 1
+                                    
+                                    st.success(f"✅ Collected! New: {new_count}, Duplicates: {dup_count}")
                                 else:
-                                    st.error("❌ Collection failed")
+                                    error = result.get('error', 'Unknown error') if result else 'No response'
+                                    st.error(f"❌ Collection failed: {error}")
                             else:
                                 st.error("❌ API key not found")
                         except Exception as e:
                             st.error(f"❌ Error: {str(e)}")
+                    
+                    # Refresh to show updated data
+                    time.sleep(1)
                     st.rerun()
         
         st.markdown("---")
@@ -512,12 +844,20 @@ def main():
             st.markdown("**Select Businesses to Monitor:**")
             
             # Get all available businesses from database (includes manual additions)
+            # Force refresh from database to show newly added businesses
             all_businesses = BusinessConfig.get_all_businesses_from_db()
             business_names = [name for _, name in all_businesses]
             
+            # Show business count and last update
+            st.caption(f"📊 {len(business_names)} businesses available • Updated: {datetime.now().strftime('%H:%M:%S')}")
+            
             if business_names:
-                # Current enabled businesses
+                # Current enabled businesses from config
                 current_enabled = current_config.get('enabled_businesses', [])
+                
+                # Filter to only include businesses that exist in current business_names
+                # (in case some were disabled or deleted)
+                valid_current_enabled = [b for b in current_enabled if b in business_names]
                 
                 # Select all / none buttons
                 col_sel1, col_sel2, col_sel3 = st.columns(3)
@@ -526,21 +866,22 @@ def main():
                 with col_sel2:
                     select_none = st.button("❌ Clear All", key="select_none_biz")
                 with col_sel3:
-                    st.caption(f"{len(current_enabled) if current_enabled else len(business_names)} selected")
+                    st.caption(f"{len(valid_current_enabled) if valid_current_enabled else len(business_names)} selected")
                 
                 # Handle select all/none
                 if select_all:
-                    current_enabled = business_names.copy()
+                    valid_current_enabled = business_names.copy()
                 elif select_none:
-                    current_enabled = []
+                    valid_current_enabled = []
                 
                 # Multi-select for businesses
+                # Use valid_current_enabled as default (only businesses that exist)
                 selected_businesses = st.multiselect(
                     "Businesses",
                     options=business_names,
-                    default=current_enabled if current_enabled else business_names,
+                    default=valid_current_enabled if valid_current_enabled else business_names,
                     key="scheduler_businesses",
-                    help="Leave empty to collect from all businesses"
+                    help="Select businesses to monitor (only enabled businesses shown)"
                 )
             else:
                 st.warning("⚠️ No businesses configured in settings")
@@ -580,25 +921,41 @@ def main():
         
         # Scheduler controls
         st.markdown("---")
-        col_sch1, col_sch2 = st.columns(2)
+        
+        # Real-time status indicator with auto-refresh
+        is_running = scheduler_status.get('active', False)
+        
+        col_sch1, col_sch2, col_sch3 = st.columns([2, 1, 1])
         
         with col_sch1:
-            if not scheduler_status.get('active', False):
-                if st.button("▶️ Start Background Scheduler", type="primary", key="start_scheduler"):
-                    scheduler.start()
-                    st.success("✅ Background scheduler started!")
-                    st.rerun()
+            if not is_running:
+                if st.button("▶️ Start Background Scheduler", type="primary", key="start_scheduler", use_container_width=True):
+                    if scheduler.start():
+                        st.success("✅ Background scheduler started!")
+                        time.sleep(1)  # Give it a moment to start
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to start scheduler")
             else:
-                if st.button("⏸️ Stop Background Scheduler", type="secondary", key="stop_scheduler"):
-                    scheduler.stop()
-                    st.info("⏸️ Background scheduler stopped")
-                    st.rerun()
+                if st.button("⏹️ Stop Background Scheduler", type="secondary", key="stop_scheduler", use_container_width=True):
+                    if scheduler.stop():
+                        st.info("✅ Background scheduler stopped successfully")
+                        time.sleep(1)  # Give it a moment to stop
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Scheduler may already be stopped")
         
         with col_sch2:
-            if scheduler_status.get('active', False):
-                st.success("✅ Running")
+            if is_running:
+                st.markdown("### ✅")
+                st.markdown("<p style='color: #28a745; font-weight: bold; text-align: center;'>RUNNING</p>", unsafe_allow_html=True)
             else:
-                st.info("⏸️ Stopped")
+                st.markdown("### ⏸️")
+                st.markdown("<p style='color: #6c757d; font-weight: bold; text-align: center;'>STOPPED</p>", unsafe_allow_html=True)
+        
+        with col_sch3:
+            # Auto-refresh toggle
+            auto_refresh = st.checkbox("🔄 Auto", value=is_running, key="auto_refresh", help="Auto-refresh status every 5 seconds")
         
         # Show scheduler status from file
         if scheduler_status.get('active', False):
@@ -631,7 +988,7 @@ def main():
                 except:
                     st.caption(f"🕒 Last run: {last_run}")
             
-            # Next run countdown
+            # Next run countdown with live progress
             next_run = scheduler_status.get('next_run')
             if next_run:
                 try:
@@ -642,26 +999,60 @@ def main():
                     if time_left > 0:
                         minutes_left = int(time_left // 60)
                         seconds_left = int(time_left % 60)
-                        st.caption(f"⏳ Next in: {minutes_left}m {seconds_left}s")
+                        
+                        # Colorful countdown display
+                        if minutes_left == 0 and seconds_left < 30:
+                            color = "#ff6b6b"  # Red - almost time
+                            emoji = "🔴"
+                        elif minutes_left < 2:
+                            color = "#ffd93d"  # Yellow - soon
+                            emoji = "🟡"
+                        else:
+                            color = "#51cf66"  # Green - plenty of time
+                            emoji = "🟢"
+                        
+                        st.markdown(f"""
+                        <div style="background: {color}; padding: 10px; border-radius: 8px; text-align: center;">
+                            <p style="color: white; font-weight: bold; margin: 0; font-size: 16px;">
+                                {emoji} Next in: {minutes_left}m {seconds_left}s
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
                         
                         # Progress bar (use configured interval)
                         interval_seconds = current_config.get('interval_minutes', 30) * 60
                         progress = 1 - (time_left / interval_seconds)
                         st.progress(max(0, min(1, progress)))
+                        
+                        # Show next run time
+                        st.caption(f"📅 Next run at: {next_time.strftime('%H:%M:%S')}")
                     else:
-                        st.caption("⏰ Collection in progress...")
-                except:
-                    pass
+                        st.markdown("""
+                        <div style="background: #845ef7; padding: 10px; border-radius: 8px; text-align: center; animation: pulse 2s infinite;">
+                            <p style="color: white; font-weight: bold; margin: 0; font-size: 16px;">
+                                ⏰ Collection in progress...
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                except Exception as e:
+                    st.caption(f"⚠️ Error parsing next run time: {str(e)}")
             
-            # Show recent logs
+            # Show recent logs with color coding
             st.markdown("**📝 Recent Activity:**")
             logs = scheduler_status.get('logs', [])
             
             if logs:
-                # Show last 5 logs in expander
-                with st.expander("View Activity Log", expanded=False):
+                # Count errors
+                error_count = sum(1 for log in logs if log.get('level') == 'error')
+                
+                # Show error warning if any
+                if error_count > 0:
+                    st.warning(f"⚠️ {error_count} error(s) detected in logs")
+                
+                # Show last 15 logs in expander (increased from 10)
+                with st.expander("View Activity Log", expanded=(error_count > 0)):
                     # Reverse to show newest first
-                    for log in reversed(logs[-10:]):
+                    for log in reversed(logs[-15:]):
                         timestamp = log.get('timestamp', '')
                         level = log.get('level', 'info')
                         message = log.get('message', '')
@@ -673,15 +1064,31 @@ def main():
                         except:
                             time_str = timestamp
                         
-                        # Icon based on level
-                        icon = {
-                            'info': 'ℹ️',
-                            'success': '✅',
-                            'error': '❌',
-                            'warning': '⚠️'
-                        }.get(level, 'ℹ️')
-                        
-                        st.caption(f"{icon} `{time_str}` {message}")
+                        # Color and icon based on level
+                        if level == 'error':
+                            color = "#ff6b6b"
+                            icon = "❌"
+                            st.markdown(f"""
+                            <div style="background: {color}; padding: 8px; border-radius: 5px; margin: 3px 0;">
+                                <span style="color: white; font-weight: bold;">{icon} {time_str}</span>
+                                <span style="color: white;"> {message}</span>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        elif level == 'warning':
+                            color = "#ffd93d"
+                            icon = "⚠️"
+                            st.markdown(f"""
+                            <div style="background: {color}; padding: 8px; border-radius: 5px; margin: 3px 0;">
+                                <span style="font-weight: bold;">{icon} {time_str}</span>
+                                <span> {message}</span>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        elif level == 'success':
+                            icon = "✅"
+                            st.caption(f"{icon} `{time_str}` {message}")
+                        else:
+                            icon = "ℹ️"
+                            st.caption(f"{icon} `{time_str}` {message}")
             else:
                 st.caption("No activity yet")
             
@@ -694,10 +1101,13 @@ def main():
 - ✓ View logs to see what's happening
             """)
         
-        # Manual refresh button for status
-        if scheduler_status.get('active', False):
-            if st.button("🔄 Update Status", key="update_scheduler", help="Refresh scheduler status"):
-                st.rerun()
+        # Manual refresh button
+        if st.button("🔄 Refresh Now", key="update_scheduler", help="Manually refresh scheduler status", use_container_width=True):
+            st.rerun()
+        
+        # Auto-refresh status (caption only)
+        if auto_refresh and is_running:
+            st.caption("🔄 Auto-refresh enabled (updates every 3 seconds)")
         
         st.markdown("---")
         
@@ -714,8 +1124,9 @@ def main():
     if 'timestamp_parsed' in df.columns and df['timestamp_parsed'].dtype == 'object':
         df['timestamp_parsed'] = pd.to_datetime(df['timestamp_parsed'], errors='coerce')
     
-    # Use time_category from database if available, otherwise calculate
-    if 'time_category' not in df.columns or df['time_category'].isna().all():
+    # ALWAYS recalculate time_category to ensure accuracy with current time
+    # This fixes issues where old categories become stale
+    if 'timestamp_parsed' in df.columns:
         df['time_category'] = df['timestamp_parsed'].apply(categorize_timestamp)
     
     # 🎯 BUSINESS FILTERING SYSTEM
@@ -1160,9 +1571,14 @@ def main():
             )
         
         with col2:
+            # Get time categories in proper chronological order
+            time_category_order = ['Last Hour', 'Today', 'Yesterday', 'This Week', 
+                                  'This Month', 'Last 3 Months', 'Last 6 Months', 
+                                  'This Year', 'Older']
+            available_categories = [cat for cat in time_category_order if cat in df['time_category'].unique()]
             selected_time = st.selectbox(
                 "Time Filter:",
-                ["All"] + list(df['time_category'].unique()),
+                ["All"] + available_categories,
                 key="time_filter_details"
             )
         
@@ -1306,26 +1722,98 @@ def main():
     with tab5:
         st.markdown("## 🤖 AI Analysis with Gemini")
         
-        st.info("💡 Use AI to get deep insights from customer reviews")
+        st.info("💡 Use AI to get deep insights from customer reviews with advanced filters")
         
-        # Analysis configuration
-        col1, col2 = st.columns(2)
+        # 🎯 ADVANCED FILTERS SECTION
+        st.markdown("### 🔍 Advanced Filters")
+        
+        # Quick presets
+        with st.expander("⚡ Quick Filter Presets", expanded=False):
+            col_preset1, col_preset2, col_preset3 = st.columns(3)
+            
+            with col_preset1:
+                if st.button("🌟 Recent Positive", use_container_width=True, help="Last week, 4-5 stars"):
+                    st.session_state.ai_time_select = 'This Week'
+                    st.session_state.ai_sentiment_select = 'Positive (4-5★)'
+                    st.rerun()
+            
+            with col_preset2:
+                if st.button("⚠️ Recent Issues", use_container_width=True, help="Last week, 1-2 stars"):
+                    st.session_state.ai_time_select = 'This Week'
+                    st.session_state.ai_sentiment_select = 'Negative (1-2★)'
+                    st.rerun()
+            
+            with col_preset3:
+                if st.button("📊 All Time Overview", use_container_width=True, help="All reviews, all ratings"):
+                    st.session_state.ai_time_select = 'All'
+                    st.session_state.ai_sentiment_select = 'All'
+                    st.session_state.ai_rating_select = 'All'
+                    st.rerun()
+        
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             # Business selection for AI
             businesses_for_ai = ['All'] + sorted(df['business_name'].unique().tolist())
             selected_business_ai = st.selectbox(
-                "Select Business for AI Analysis",
+                "📍 Business",
                 businesses_for_ai,
                 key="ai_business_select"
             )
         
         with col2:
-            # Time period selection
+            # Time period selection - use all available categories
+            available_time_categories = ['All', 'Last Hour', 'Today', 'Yesterday', 'This Week', 
+                                        'This Month', 'Last 3 Months', 'Last 6 Months', 
+                                        'This Year', 'Older']
             time_filter_ai = st.selectbox(
-                "Select Time Period",
-                ['All', 'Today', 'Yesterday', 'This Week', 'This Month', 'Older'],
+                "📅 Time Period",
+                available_time_categories,
                 key="ai_time_select"
+            )
+        
+        with col3:
+            # Rating filter
+            available_ratings = ['All'] + sorted([int(r) for r in df['rating'].unique() if pd.notna(r)], reverse=True)
+            rating_filter_ai = st.selectbox(
+                "⭐ Rating",
+                available_ratings,
+                key="ai_rating_select"
+            )
+        
+        # Second row of filters
+        col4, col5, col6 = st.columns(3)
+        
+        with col4:
+            # Sentiment filter (based on rating)
+            sentiment_filter = st.selectbox(
+                "😊 Sentiment",
+                ['All', 'Positive (4-5★)', 'Neutral (3★)', 'Negative (1-2★)'],
+                key="ai_sentiment_select"
+            )
+        
+        with col5:
+            # Review count limit
+            max_reviews = st.number_input(
+                "📊 Max Reviews",
+                min_value=10,
+                max_value=500,
+                value=50,
+                step=10,
+                help="Maximum number of reviews to analyze (affects API cost)",
+                key="ai_max_reviews"
+            )
+        
+        with col6:
+            # Text length filter
+            min_text_length = st.slider(
+                "📝 Min Text Length",
+                min_value=0,
+                max_value=100,
+                value=10,
+                step=5,
+                help="Minimum characters in review text",
+                key="ai_min_length"
             )
         
         # Filter data for AI analysis
@@ -1337,34 +1825,111 @@ def main():
         if time_filter_ai != 'All':
             ai_df = ai_df[ai_df['time_category'] == time_filter_ai]
         
-        # Get text reviews
-        text_reviews_ai = ai_df[ai_df['review_text'].notna() & (ai_df['review_text'] != '')]['review_text'].tolist()
+        if rating_filter_ai != 'All':
+            ai_df = ai_df[ai_df['rating'] == rating_filter_ai]
+        
+        # Apply sentiment filter
+        if sentiment_filter == 'Positive (4-5★)':
+            ai_df = ai_df[ai_df['rating'] >= 4]
+        elif sentiment_filter == 'Neutral (3★)':
+            ai_df = ai_df[ai_df['rating'] == 3]
+        elif sentiment_filter == 'Negative (1-2★)':
+            ai_df = ai_df[ai_df['rating'] <= 2]
+        
+        # Get text reviews with minimum length filter
+        text_reviews_ai = ai_df[
+            (ai_df['review_text'].notna()) & 
+            (ai_df['review_text'] != '') & 
+            (ai_df['review_text'].str.len() >= min_text_length)
+        ]['review_text'].tolist()
+        
+        # Limit to max_reviews
+        text_reviews_ai = text_reviews_ai[:max_reviews]
         
         st.markdown("---")
         
-        # Show selection summary
-        col1, col2, col3 = st.columns(3)
+        # Show selection summary with more metrics
+        col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
-            st.metric("Business", selected_business_ai)
+            st.metric("Business", selected_business_ai if selected_business_ai != 'All' else 'All')
         
         with col2:
             st.metric("Time Period", time_filter_ai)
         
         with col3:
+            st.metric("Rating", f"{rating_filter_ai}★" if rating_filter_ai != 'All' else 'All')
+        
+        with col4:
+            st.metric("Sentiment", sentiment_filter.split(' ')[0])
+        
+        with col5:
             st.metric("Text Reviews", len(text_reviews_ai))
+        
+        st.markdown("---")
+        
+        # 🎨 CUSTOM PROMPT SECTION
+        st.markdown("### 🎨 Customize AI Analysis (Optional)")
+        
+        with st.expander("✍️ Add Custom Instructions", expanded=False):
+            st.caption("Add your own instructions to customize the AI analysis. Leave empty for default analysis.")
+            
+            custom_prompt = st.text_area(
+                "Custom AI Instructions:",
+                placeholder="Example: Focus on customer service quality and wait times. Compare morning vs evening experiences.",
+                max_chars=1000,
+                height=100,
+                help="Maximum 1000 characters. This will be added to the default analysis prompt.",
+                key="ai_custom_prompt"
+            )
+            
+            char_count = len(custom_prompt) if custom_prompt else 0
+            col_char1, col_char2 = st.columns([3, 1])
+            
+            with col_char1:
+                if char_count > 0:
+                    progress = char_count / 1000
+                    st.progress(progress)
+            
+            with col_char2:
+                color = "#ff6b6b" if char_count > 900 else "#51cf66" if char_count > 0 else "#adb5bd"
+                st.markdown(f"<p style='color: {color}; text-align: right; margin: 0;'>{char_count}/1000</p>", unsafe_allow_html=True)
+            
+            if custom_prompt:
+                st.info(f"✅ Custom instructions added ({char_count} characters)")
         
         st.markdown("---")
         
         # Analyze button
         if len(text_reviews_ai) > 0:
-            if st.button("🚀 Analyze with AI", type="primary", key="analyze_button"):
+            col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
+            
+            with col_btn1:
+                analyze_button = st.button("🚀 Analyze with AI", type="primary", key="analyze_button", use_container_width=True)
+            
+            with col_btn2:
+                if len(text_reviews_ai) < 5:
+                    st.warning("⚠️ Low sample")
+                elif len(text_reviews_ai) >= 50:
+                    st.success("✅ Good sample")
+                else:
+                    st.info("ℹ️ Fair sample")
+            
+            with col_btn3:
+                estimated_time = max(5, len(text_reviews_ai) // 10)
+                st.caption(f"⏱️ ~{estimated_time}s")
+            
+            if analyze_button:
                 with st.spinner("🤖 AI is analyzing reviews... This may take a few seconds..."):
-                    # Perform AI analysis
+                    # Perform AI analysis with ALL filter context
                     result = analyze_reviews_with_ai(
                         text_reviews_ai,
                         selected_business_ai,
-                        time_filter_ai
+                        time_filter_ai,
+                        custom_instructions=custom_prompt if custom_prompt else None,
+                        rating_filter=rating_filter_ai,
+                        sentiment_filter=sentiment_filter,
+                        min_text_length=min_text_length
                     )
                     
                     if result["success"]:
@@ -1373,7 +1938,15 @@ def main():
                         # Display analysis in a nice format
                         st.markdown("### 📊 AI Analysis Results")
                         
-                        # Analysis content
+                        # Build filter summary
+                        filter_summary = f"📅 {time_filter_ai}"
+                        if rating_filter_ai != 'All':
+                            filter_summary += f" | ⭐ {rating_filter_ai}★"
+                        if sentiment_filter != 'All':
+                            filter_summary += f" | 😊 {sentiment_filter.split(' ')[0]}"
+                        filter_summary += f" | 💬 {result['reviews_count']} reviews"
+                        
+                        # Analysis header with filters
                         st.markdown(f"""
                         <div style="
                             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -1386,20 +1959,46 @@ def main():
                             <h3 style="color: #FFE066; margin-top: 0;">
                                 🎯 Analysis for: {selected_business_ai}
                             </h3>
-                            <p style="opacity: 0.9;">📅 Period: {time_filter_ai} | 💬 Reviews: {result['reviews_count']}</p>
+                            <p style="opacity: 0.9; margin: 5px 0;">{filter_summary}</p>
+                            {'<p style="opacity: 0.85; margin: 5px 0; font-size: 14px;">✍️ Custom instructions applied</p>' if custom_prompt else ''}
                         </div>
                         """, unsafe_allow_html=True)
                         
                         # Display the analysis
                         st.markdown(result["analysis"])
                         
-                        # Download button for analysis
-                        st.download_button(
-                            label="📥 Download Analysis",
-                            data=result["analysis"],
-                            file_name=f"ai_analysis_{selected_business_ai}_{time_filter_ai}.txt",
-                            mime="text/plain"
-                        )
+                        # Download button for analysis with metadata
+                        analysis_metadata = f"""
+AI Analysis Report
+==================
+Business: {selected_business_ai}
+Time Period: {time_filter_ai}
+Rating Filter: {rating_filter_ai}
+Sentiment: {sentiment_filter}
+Reviews Analyzed: {result['reviews_count']}
+Date Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Custom Instructions: {'Yes' if custom_prompt else 'No'}
+
+{'='*50}
+
+{result['analysis']}
+"""
+                        
+                        col_dl1, col_dl2 = st.columns([3, 1])
+                        
+                        with col_dl1:
+                            st.download_button(
+                                label="📥 Download Analysis Report",
+                                data=analysis_metadata,
+                                file_name=f"ai_analysis_{selected_business_ai}_{time_filter_ai}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                                mime="text/plain",
+                                use_container_width=True
+                            )
+                        
+                        with col_dl2:
+                            # Show token estimate
+                            token_estimate = len(result['analysis'].split()) * 1.3
+                            st.caption(f"📊 ~{int(token_estimate)} tokens")
                         
                     else:
                         st.error(f"❌ Analysis failed: {result.get('error', 'Unknown error')}")
@@ -1417,6 +2016,27 @@ def main():
         else:
             st.warning("⚠️ No text reviews available for the selected filters. Please adjust your selection.")
             st.info("💡 Try selecting 'All' for business and time period to see all available reviews.")
+    
+    # ⚡ AUTO-REFRESH MECHANISM (at the end, after all content is rendered)
+    # This ensures the page refreshes AFTER displaying all content, not before
+    if 'auto_refresh' in st.session_state:
+        auto_refresh_enabled = st.session_state.auto_refresh
+        
+        # Check scheduler status
+        scheduler_status = {}
+        if os.path.exists('scheduler_status.json'):
+            try:
+                with open('scheduler_status.json', 'r') as f:
+                    scheduler_status = json.load(f)
+            except:
+                pass
+        
+        is_running = scheduler_status.get('active', False)
+        
+        # Auto-refresh only if enabled and scheduler is running
+        if auto_refresh_enabled and is_running:
+            time.sleep(3)
+            st.rerun()
 
 if __name__ == "__main__":
     main()

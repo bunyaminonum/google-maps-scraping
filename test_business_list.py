@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Test business list from database
-"""
+"""Test business CRUD operations"""
 
-from api_pipeline.config.settings import BusinessConfig
+from database_test import ReviewsDatabase
 
-print("🔍 Testing get_all_businesses_from_db()")
-print("=" * 70)
+db = ReviewsDatabase('reviews.db')
 
-businesses = BusinessConfig.get_all_businesses_from_db()
+print("\n" + "="*60)
+print("📊 BUSINESSES IN DATABASE")
+print("="*60)
 
-print(f"\n📊 Total unique businesses: {len(businesses)}")
-print("\n📍 Business List:")
-print("-" * 70)
+businesses = db.get_all_businesses()
 
-for i, (place_id, name) in enumerate(businesses, 1):
-    place_id_short = place_id[:20] + "..." if len(place_id) > 20 else place_id
-    print(f"{i}. {name}")
-    print(f"   Place ID: {place_id_short}")
+for i, b in enumerate(businesses, 1):
+    print(f"\n{i}. {b['name']}")
+    print(f"   Place ID: {b['place_id']}")
+    print(f"   Enabled: {'✅ Yes' if b['enabled'] else '❌ No'}")
+    print(f"   ID: {b['id']}")
 
-print("\n" + "=" * 70)
+print("\n" + "="*60)
+print(f"Total: {len(businesses)} businesses")
+print("="*60)

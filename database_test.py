@@ -95,10 +95,34 @@ class ReviewsDatabase:
         )
         ''')
         
+        # Businesses table (NEW!)
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS businesses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            place_id TEXT NOT NULL,
+            enabled INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        ''')
+        
+        # Create index for faster lookups
+        cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_business_name 
+        ON businesses(name)
+        ''')
+        
+        cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_business_enabled 
+        ON businesses(enabled)
+        ''')
+        
         conn.commit()
         
-        # Run migration for existing databases
+        # Run migrations for existing databases
         self._migrate_add_review_hash(conn, cursor)
+        self._migrate_populate_businesses(conn, cursor)
         
         conn.close()
         print("✅ Database tables created/verified")
@@ -154,6 +178,47 @@ class ReviewsDatabase:
             print(f"   ✅ Migration complete: {updated_count} reviews updated with hashes")
         else:
             print("   ℹ️  Database already up to date")
+    
+    def _migrate_populate_businesses(self, conn, cursor):
+        """
+        Migration: Populate businesses table from existing reviews
+        Extracts unique businesses from reviews table
+        """
+        # Check if businesses table has any data
+        cursor.execute("SELECT COUNT(*) FROM businesses")
+        count = cursor.fetchone()[0]
+        
+        if count == 0:
+            print("🔄 Migrating database: Populating businesses table...")
+            
+            # Get unique businesses from reviews with valid Place IDs
+            cursor.execute("""
+                SELECT DISTINCT business_name, business_url 
+                FROM reviews 
+                WHERE business_url LIKE 'ChIJ%'
+                AND business_name IS NOT NULL
+                AND business_name != ''
+                ORDER BY business_name
+            """)
+            
+            businesses = cursor.fetchall()
+            inserted_count = 0
+            
+            for name, place_id in businesses:
+                try:
+                    cursor.execute("""
+                        INSERT INTO businesses (name, place_id, enabled)
+                        VALUES (?, ?, 1)
+                    """, (name, place_id))
+                    inserted_count += 1
+                except sqlite3.IntegrityError:
+                    # Skip duplicates
+                    pass
+            
+            conn.commit()
+            print(f"   ✅ Migration complete: {inserted_count} businesses imported")
+        else:
+            print(f"   ℹ️  Businesses table already populated ({count} businesses)")
     
     def save_scrape_session(self, session_data):
         """Save scrape session information"""
@@ -369,6 +434,197 @@ class ReviewsDatabase:
             'text_reviews': text_reviews,
             'rating_only': total_reviews - text_reviews
         }
+    
+    # ==================== BUSINESS CRUD OPERATIONS ====================
+    
+    def get_all_businesses(self, enabled_only=False):
+        """Get all businesses from database"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        if enabled_only:
+            cursor.execute("""
+                SELECT id, name, place_id, enabled, created_at, updated_at
+                FROM businesses
+                WHERE enabled = 1
+                ORDER BY name
+            """)
+        else:
+            cursor.execute("""
+                SELECT id, name, place_id, enabled, created_at, updated_at
+                FROM businesses
+                ORDER BY name
+            """)
+        
+        businesses = cursor.fetchall()
+        conn.close()
+        
+        return [
+            {
+                'id': b[0],
+                'name': b[1],
+                'place_id': b[2],
+                'enabled': bool(b[3]),
+                'created_at': b[4],
+                'updated_at': b[5]
+            }
+            for b in businesses
+        ]
+    
+    def get_business_by_id(self, business_id):
+        """Get single business by ID"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, name, place_id, enabled, created_at, updated_at
+            FROM businesses
+            WHERE id = ?
+        """, (business_id,))
+        
+        business = cursor.fetchone()
+        conn.close()
+        
+        if business:
+            return {
+                'id': business[0],
+                'name': business[1],
+                'place_id': business[2],
+                'enabled': bool(business[3]),
+                'created_at': business[4],
+                'updated_at': business[5]
+            }
+        return None
+    
+    def add_business(self, name, place_id, enabled=True):
+        """Add new business to database"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("""
+                INSERT INTO businesses (name, place_id, enabled)
+                VALUES (?, ?, ?)
+            """, (name, place_id, 1 if enabled else 0))
+            
+            conn.commit()
+            business_id = cursor.lastrowid
+            conn.close()
+            
+            print(f"✅ Business added: {name}")
+            return {'success': True, 'id': business_id, 'message': 'Business added successfully'}
+        
+        except sqlite3.IntegrityError:
+            conn.close()
+            print(f"❌ Business already exists: {name}")
+            return {'success': False, 'error': 'Business with this name already exists'}
+        
+        except Exception as e:
+            conn.close()
+            print(f"❌ Error adding business: {str(e)}")
+            return {'success': False, 'error': str(e)}
+    
+    def update_business(self, business_id, name=None, place_id=None, enabled=None):
+        """Update existing business"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Build update query dynamically
+        updates = []
+        params = []
+        
+        if name is not None:
+            updates.append("name = ?")
+            params.append(name)
+        
+        if place_id is not None:
+            updates.append("place_id = ?")
+            params.append(place_id)
+        
+        if enabled is not None:
+            updates.append("enabled = ?")
+            params.append(1 if enabled else 0)
+        
+        if updates:
+            updates.append("updated_at = CURRENT_TIMESTAMP")
+            params.append(business_id)
+            
+            query = f"UPDATE businesses SET {', '.join(updates)} WHERE id = ?"
+            
+            try:
+                cursor.execute(query, params)
+                conn.commit()
+                
+                if cursor.rowcount > 0:
+                    conn.close()
+                    print(f"✅ Business updated: ID {business_id}")
+                    return {'success': True, 'message': 'Business updated successfully'}
+                else:
+                    conn.close()
+                    return {'success': False, 'error': 'Business not found'}
+            
+            except sqlite3.IntegrityError:
+                conn.close()
+                return {'success': False, 'error': 'Business with this name already exists'}
+            
+            except Exception as e:
+                conn.close()
+                print(f"❌ Error updating business: {str(e)}")
+                return {'success': False, 'error': str(e)}
+        
+        conn.close()
+        return {'success': False, 'error': 'No updates specified'}
+    
+    def delete_business(self, business_id):
+        """Delete business from database"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("DELETE FROM businesses WHERE id = ?", (business_id,))
+            conn.commit()
+            
+            if cursor.rowcount > 0:
+                conn.close()
+                print(f"✅ Business deleted: ID {business_id}")
+                return {'success': True, 'message': 'Business deleted successfully'}
+            else:
+                conn.close()
+                return {'success': False, 'error': 'Business not found'}
+        
+        except Exception as e:
+            conn.close()
+            print(f"❌ Error deleting business: {str(e)}")
+            return {'success': False, 'error': str(e)}
+    
+    def toggle_business(self, business_id):
+        """Toggle business enabled/disabled status"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Get current status
+        cursor.execute("SELECT enabled FROM businesses WHERE id = ?", (business_id,))
+        result = cursor.fetchone()
+        
+        if result:
+            current_status = result[0]
+            new_status = 0 if current_status else 1
+            
+            cursor.execute("""
+                UPDATE businesses 
+                SET enabled = ?, updated_at = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            """, (new_status, business_id))
+            
+            conn.commit()
+            conn.close()
+            
+            status_text = "enabled" if new_status else "disabled"
+            print(f"✅ Business {status_text}: ID {business_id}")
+            return {'success': True, 'message': f'Business {status_text}', 'enabled': bool(new_status)}
+        else:
+            conn.close()
+            return {'success': False, 'error': 'Business not found'}
 
 def test_database():
     """Test database functions"""

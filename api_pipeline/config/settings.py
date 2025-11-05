@@ -64,6 +64,7 @@ class BusinessConfig:
     # Format: (place_id, business_name)
     BUSINESSES: List[tuple] = [
         ("ChIJqZW8Cvb_n0ARBuUkyCzgDDg", "İstanbul Havalimanı"),
+        ("ChIJU6Ek9MvbyhQRdNqYgE3K76w", "Sabiha Gokcen Airport"),
         # Add more businesses here
     ]
     
@@ -81,52 +82,41 @@ class BusinessConfig:
         ]
     
     @classmethod
-    def get_all_businesses_from_db(cls, db_path: str = None) -> List[tuple]:
-        """Get all unique businesses from database"""
-        import sqlite3
+    def get_all_businesses_from_db(cls, db_path: str = None, enabled_only: bool = True) -> List[tuple]:
+        """
+        Get all businesses from businesses table (primary source)
+        Falls back to static config if database not available
         
+        Args:
+            db_path: Path to database (default: Config.DATABASE_PATH)
+            enabled_only: Only return enabled businesses (default: True)
+        
+        Returns:
+            List of tuples: [(place_id, business_name), ...]
+        """
         if db_path is None:
             db_path = Config.DATABASE_PATH
         
         try:
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
+            # Import here to avoid circular dependency
+            from database_test import ReviewsDatabase
             
-            # Get unique businesses with their place_ids
-            # Use GROUP BY to get only one entry per business_name
-            # Prefer place_ids that start with 'ChIJ' (real Google place IDs)
-            cursor.execute("""
-                SELECT 
-                    CASE 
-                        WHEN business_url LIKE 'ChIJ%' THEN business_url
-                        ELSE (SELECT business_url FROM reviews r2 
-                              WHERE r2.business_name = reviews.business_name 
-                              AND r2.business_url LIKE 'ChIJ%' LIMIT 1)
-                    END as place_id,
-                    business_name
-                FROM reviews 
-                WHERE business_name IS NOT NULL 
-                AND business_name != ''
-                GROUP BY business_name
-                ORDER BY business_name
-            """)
+            # Get businesses from database table
+            db = ReviewsDatabase(db_path)
+            businesses = db.get_all_businesses(enabled_only=enabled_only)
             
-            businesses = cursor.fetchall()
-            conn.close()
-            
-            # Merge with static list
-            all_businesses = list(cls.BUSINESSES)
-            
-            # Add database businesses that aren't in static list
-            existing_names = {name for _, name in all_businesses}
-            for place_id, name in businesses:
-                if name not in existing_names:
-                    all_businesses.append((place_id or '', name))
-            
-            return all_businesses
+            if businesses:
+                # Convert to list of tuples format
+                return [(b['place_id'], b['name']) for b in businesses]
+            else:
+                # Fallback to static configuration
+                print("⚠️  No businesses in database, using static configuration")
+                return cls.BUSINESSES
             
         except Exception as e:
-            print(f"Error loading businesses from DB: {e}")
+            print(f"⚠️  Error loading businesses from database: {e}")
+            print("   Using static configuration as fallback")
+            # Return static configuration as fallback
             return cls.BUSINESSES
     
     @classmethod

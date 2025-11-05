@@ -217,7 +217,7 @@ class APIPipelineManager:
     
     def _calculate_time_category(self, timestamp: datetime) -> str:
         """
-        Calculate time category from timestamp
+        Calculate time category from timestamp with correct timezone handling
         
         Args:
             timestamp: Review timestamp
@@ -228,28 +228,37 @@ class APIPipelineManager:
         if not timestamp:
             return "Unknown"
         
-        now = datetime.now()
-        diff = now - timestamp
-        
-        if diff.days == 0:
-            if diff.seconds < 3600:  # Less than 1 hour
+        try:
+            import pytz
+            tr_tz = pytz.timezone('Europe/Istanbul')
+            now = datetime.now(tr_tz)
+            
+            # Make timestamp timezone-aware if naive
+            if timestamp.tzinfo is None:
+                timestamp = tr_tz.localize(timestamp)
+            
+            diff = now - timestamp
+            
+            if diff.total_seconds() < 3600:  # Less than 1 hour
                 return "Last Hour"
-            else:
+            elif diff.days == 0:  # Same day but more than 1 hour ago
                 return "Today"
-        elif diff.days == 1:
-            return "Yesterday"
-        elif diff.days < 7:
-            return "This Week"
-        elif diff.days < 30:
-            return "This Month"
-        elif diff.days < 90:
-            return "Last 3 Months"
-        elif diff.days < 180:
-            return "Last 6 Months"
-        elif diff.days < 365:
-            return "This Year"
-        else:
-            return "Older"
+            elif diff.days == 1:
+                return "Yesterday"
+            elif diff.days <= 7:
+                return "This Week"
+            elif diff.days <= 30:
+                return "This Month"
+            elif diff.days <= 90:
+                return "Last 3 Months"
+            elif diff.days <= 180:
+                return "Last 6 Months"
+            elif diff.days <= 365:
+                return "This Year"
+            else:
+                return "Older"
+        except:
+            return "Unknown"
     
     def get_statistics(self) -> Dict:
         """Get pipeline statistics"""
