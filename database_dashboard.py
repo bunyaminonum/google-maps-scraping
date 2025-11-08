@@ -417,7 +417,16 @@ def parse_relative_time_to_timestamp(relative_time_str):
         return datetime.now(tr_tz)
 
 def categorize_timestamp(timestamp):
-    """Categorize timestamp into time periods with detailed granularity"""
+    """Categorize timestamp into time periods with detailed granularity
+    
+    Uses CALENDAR DATES, not 24-hour periods:
+    - "Today" = Same calendar date (e.g., November 8, 2025)
+    - "Yesterday" = Previous calendar date (e.g., November 7, 2025)
+    - Not based on 24-hour intervals
+    
+    NOTE: Categories are mutually exclusive (for display purposes).
+    For filtering, use get_reviews_by_time_filter() which is cumulative.
+    """
     try:
         tr_tz = pytz.timezone('Europe/Istanbul')
         now = datetime.now(tr_tz)
@@ -426,30 +435,150 @@ def categorize_timestamp(timestamp):
         if timestamp.tzinfo is None:
             timestamp = tr_tz.localize(timestamp)
         
-        # Calculate difference
-        diff = now - timestamp
+        # Get calendar dates (year, month, day only - ignore time)
+        today_date = now.date()
+        timestamp_date = timestamp.date()
         
-        # Detailed categorization matching filter options
-        if diff.total_seconds() < 3600:  # Less than 1 hour
+        # Calculate calendar day difference
+        day_diff = (today_date - timestamp_date).days
+        
+        # Check if review is from last hour (for very recent reviews)
+        time_diff_seconds = (now - timestamp).total_seconds()
+        if time_diff_seconds < 3600 and day_diff == 0:  # Less than 1 hour AND same day
             return "Last Hour"
-        elif diff.days == 0:  # Same day but more than 1 hour ago
+        
+        # Calendar-based categorization
+        if day_diff == 0:
+            # Same calendar date = Today
             return "Today"
-        elif diff.days == 1:
+        elif day_diff == 1:
+            # One calendar day ago = Yesterday
             return "Yesterday"
-        elif diff.days <= 7:
+        elif day_diff <= 7:
+            # Within last 7 calendar days = This Week
             return "This Week"
-        elif diff.days <= 30:
+        elif day_diff <= 30:
+            # Within last 30 calendar days = This Month
             return "This Month"
-        elif diff.days <= 90:
+        elif day_diff <= 90:
+            # Within last 90 calendar days = Last 3 Months
             return "Last 3 Months"
-        elif diff.days <= 180:
+        elif day_diff <= 180:
+            # Within last 180 calendar days = Last 6 Months
             return "Last 6 Months"
-        elif diff.days <= 365:
+        elif day_diff <= 365:
+            # Within last 365 calendar days = This Year
             return "This Year"
         else:
+            # More than 365 calendar days ago = Older
             return "Older"
     except Exception as e:
         return "Time Unknown"
+
+def get_reviews_by_time_filter(df, time_filter):
+    """Filter reviews by time period with CUMULATIVE logic
+    
+    When user selects a time period, they get ALL reviews within that timeframe:
+    - "Last Hour" → Only last hour
+    - "Today" → Today + Last Hour
+    - "Yesterday" → Yesterday only (single day)
+    - "This Week" → Last 7 days (Last Hour + Today + Yesterday + This Week)
+    - "This Month" → Last 30 days (This Week + rest of month)
+    - "Last 3 Months" → Last 90 days
+    - "Last 6 Months" → Last 180 days
+    - "This Year" → Last 365 days
+    - "Older" → Everything older than 365 days
+    - "All" → All reviews
+    
+    Args:
+        df: DataFrame with 'timestamp_parsed' column
+        time_filter: Selected time filter string
+    
+    Returns:
+        Filtered DataFrame
+    """
+    if time_filter == 'All':
+        return df
+    
+    # Ensure timestamp_parsed is datetime
+    if 'timestamp_parsed' not in df.columns:
+        return df
+    
+    try:
+        import pytz
+        from datetime import datetime, timedelta
+        
+        tr_tz = pytz.timezone('Europe/Istanbul')
+        now = datetime.now(tr_tz)
+        today_date = now.date()
+        
+        # Convert timestamp_parsed to datetime if needed
+        df_copy = df.copy()
+        if df_copy['timestamp_parsed'].dtype == 'object':
+            df_copy['timestamp_parsed'] = pd.to_datetime(df_copy['timestamp_parsed'], errors='coerce')
+        
+        # Make timezone-aware
+        if df_copy['timestamp_parsed'].dt.tz is None:
+            df_copy['timestamp_parsed'] = df_copy['timestamp_parsed'].apply(
+                lambda x: tr_tz.localize(x) if pd.notna(x) and x.tzinfo is None else x
+            )
+        
+        # Filter based on cumulative time ranges
+        if time_filter == 'Last Hour':
+            # Only last hour
+            cutoff = now - timedelta(hours=1)
+            return df_copy[df_copy['timestamp_parsed'] >= cutoff]
+        
+        elif time_filter == 'Today':
+            # Today + Last Hour (all of today)
+            cutoff = datetime.combine(today_date, datetime.min.time())
+            cutoff = tr_tz.localize(cutoff)
+            return df_copy[df_copy['timestamp_parsed'] >= cutoff]
+        
+        elif time_filter == 'Yesterday':
+            # Only yesterday (single day)
+            yesterday_date = today_date - timedelta(days=1)
+            start_of_yesterday = tr_tz.localize(datetime.combine(yesterday_date, datetime.min.time()))
+            start_of_today = tr_tz.localize(datetime.combine(today_date, datetime.min.time()))
+            return df_copy[(df_copy['timestamp_parsed'] >= start_of_yesterday) & 
+                          (df_copy['timestamp_parsed'] < start_of_today)]
+        
+        elif time_filter == 'This Week':
+            # Last 7 days (includes everything from last 7 days)
+            cutoff = now - timedelta(days=7)
+            return df_copy[df_copy['timestamp_parsed'] >= cutoff]
+        
+        elif time_filter == 'This Month':
+            # Last 30 days
+            cutoff = now - timedelta(days=30)
+            return df_copy[df_copy['timestamp_parsed'] >= cutoff]
+        
+        elif time_filter == 'Last 3 Months':
+            # Last 90 days
+            cutoff = now - timedelta(days=90)
+            return df_copy[df_copy['timestamp_parsed'] >= cutoff]
+        
+        elif time_filter == 'Last 6 Months':
+            # Last 180 days
+            cutoff = now - timedelta(days=180)
+            return df_copy[df_copy['timestamp_parsed'] >= cutoff]
+        
+        elif time_filter == 'This Year':
+            # Last 365 days
+            cutoff = now - timedelta(days=365)
+            return df_copy[df_copy['timestamp_parsed'] >= cutoff]
+        
+        elif time_filter == 'Older':
+            # Everything older than 365 days
+            cutoff = now - timedelta(days=365)
+            return df_copy[df_copy['timestamp_parsed'] < cutoff]
+        
+        else:
+            return df_copy
+    
+    except Exception as e:
+        st.error(f"Error filtering by time: {str(e)}")
+        return df
 
 def run_api_collector():
     """Collect data via Google Maps API"""
@@ -1768,8 +1897,9 @@ Get-Process python | Where-Object {$_.CommandLine -like "*run_scheduler_standalo
         if selected_rating != "All":
             filtered_df = filtered_df[filtered_df['rating'] == selected_rating]
         
+        # Use cumulative time filter (This Week = last 7 days, etc.)
         if selected_time != "All":
-            filtered_df = filtered_df[filtered_df['time_category'] == selected_time]
+            filtered_df = get_reviews_by_time_filter(filtered_df, selected_time)
         
         if show_only_text:
             filtered_df = filtered_df[filtered_df['review_text'].notna() & (filtered_df['review_text'] != '')]
@@ -1995,8 +2125,9 @@ Get-Process python | Where-Object {$_.CommandLine -like "*run_scheduler_standalo
         if selected_business_ai != 'All':
             ai_df = ai_df[ai_df['business_name'] == selected_business_ai]
         
+        # Use cumulative time filter (This Week = last 7 days, This Month = last 30 days, etc.)
         if time_filter_ai != 'All':
-            ai_df = ai_df[ai_df['time_category'] == time_filter_ai]
+            ai_df = get_reviews_by_time_filter(ai_df, time_filter_ai)
         
         if rating_filter_ai != 'All':
             ai_df = ai_df[ai_df['rating'] == rating_filter_ai]
