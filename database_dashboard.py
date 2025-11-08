@@ -922,9 +922,10 @@ def main():
         # Scheduler controls
         st.markdown("---")
         
-        # Real-time status indicator with auto-refresh
+        # Real-time status indicator
         is_running = scheduler_status.get('active', False)
         
+        # Control buttons layout
         col_sch1, col_sch2, col_sch3 = st.columns([2, 1, 1])
         
         with col_sch1:
@@ -954,10 +955,104 @@ def main():
                 st.markdown("<p style='color: #6c757d; font-weight: bold; text-align: center;'>STOPPED</p>", unsafe_allow_html=True)
         
         with col_sch3:
-            # Auto-refresh toggle
-            auto_refresh = st.checkbox("🔄 Auto", value=is_running, key="auto_refresh", help="Auto-refresh status every 5 seconds")
+            # Manual refresh button moved here
+            if st.button("🔄 Refresh", key="manual_refresh_btn", use_container_width=True, help="Manually refresh scheduler status"):
+                st.rerun()
+        
+        # Independent Scheduler Runner Option
+        st.markdown("---")
+        st.markdown("### 🚀 Run Scheduler Independently")
+        
+        with st.expander("ℹ️ About Independent Mode", expanded=False):
+            st.info("""
+**🎯 What is Independent Mode?**
+
+Run the scheduler as a standalone process that continues even when you close the dashboard.
+
+**✅ Advantages:**
+- Scheduler runs continuously in background
+- No need to keep dashboard open
+- More reliable for long-term operation
+- Dashboard shows live data from database
+
+**📝 How to use:**
+1. Click "Open Instructions" below
+2. Follow the simple steps to launch standalone scheduler
+3. Scheduler will run independently and save to database
+4. Dashboard will show latest data when you open it
+
+**⚠️ Note:** Only one scheduler instance should run at a time.
+            """)
+        
+        col_ind1, col_ind2 = st.columns(2)
+        
+        with col_ind1:
+            if st.button("📖 Open Instructions", key="show_independent_instructions", use_container_width=True):
+                st.session_state['show_independent_guide'] = True
+        
+        with col_ind2:
+            # Check if standalone script exists
+            standalone_script = os.path.join(os.getcwd(), 'run_scheduler_standalone.py')
+            if os.path.exists(standalone_script):
+                st.success("✅ Script ready")
+            else:
+                st.warning("⚠️ Script not found")
+        
+        # Show instructions if requested
+        if st.session_state.get('show_independent_guide', False):
+            st.markdown("---")
+            st.markdown("### 📖 Independent Scheduler Setup Guide")
+            
+            st.markdown("""
+**Option 1: Using Windows Batch File (Easiest)**
+
+1. **Close this dashboard** (optional but recommended)
+2. **Double-click** `run_scheduler.bat` in project folder
+3. A command window will open showing scheduler status
+4. **Leave it running** - minimize the window if needed
+5. **To stop**: Go to the command window and press `Ctrl+C`
+
+---
+
+**Option 2: Using Python Directly**
+
+Open PowerShell in project folder and run:
+```powershell
+python run_scheduler_standalone.py
+```
+
+---
+
+**Option 3: Background Process (Advanced)**
+
+To run completely hidden in background:
+```powershell
+Start-Process -WindowStyle Hidden python -ArgumentList "run_scheduler_standalone.py"
+```
+
+To stop:
+```powershell
+Get-Process python | Where-Object {$_.CommandLine -like "*run_scheduler_standalone*"} | Stop-Process
+```
+
+---
+
+**📊 Monitoring:**
+- Check `scheduler_status.json` for real-time status
+- Open dashboard anytime to view collected data
+- Scheduler logs are saved in status file
+
+**⚠️ Important:**
+- Only run ONE scheduler instance at a time
+- If dashboard scheduler is running, stop it before starting independent mode
+            """)
+            
+            if st.button("✅ Got it, close instructions", key="close_independent_guide"):
+                st.session_state['show_independent_guide'] = False
+                st.rerun()
         
         # Show scheduler status from file
+        st.markdown("---")
         if scheduler_status.get('active', False):
             st.markdown("**📊 Scheduler Status:**")
             
@@ -988,20 +1083,110 @@ def main():
                 except:
                     st.caption(f"🕒 Last run: {last_run}")
             
-            # Next run countdown with live progress
+            # Next run countdown (server-side with intelligent handling)
             next_run = scheduler_status.get('next_run')
+            last_run = scheduler_status.get('last_run')
+            
             if next_run:
                 try:
                     next_time = datetime.fromisoformat(next_run)
                     now = datetime.now()
                     time_left = (next_time - now).total_seconds()
                     
-                    if time_left > 0:
+                    # Calculate expected next run based on last run and interval
+                    interval_minutes = current_config.get('interval_minutes', 30)
+                    
+                    # Check if last_run exists and calculate time since last run
+                    time_since_last_run = None
+                    if last_run:
+                        try:
+                            last_run_time = datetime.fromisoformat(last_run)
+                            time_since_last_run = (now - last_run_time).total_seconds()
+                        except:
+                            pass
+                    
+                    # If scheduled time has passed (time_left < 0)
+                    if time_left < 0:
+                        # Calculate next expected run from last run
+                        if last_run and time_since_last_run is not None:
+                            try:
+                                last_run_time = datetime.fromisoformat(last_run)
+                                
+                                # Calculate how many intervals have passed since last run
+                                intervals_passed = int(time_since_last_run // (interval_minutes * 60))
+                                
+                                # Calculate next expected run (add enough intervals to get to future)
+                                estimated_next = last_run_time + timedelta(minutes=interval_minutes * (intervals_passed + 1))
+                                est_time_left = (estimated_next - now).total_seconds()
+                                
+                                # If estimation looks reasonable (within next 2 intervals)
+                                if est_time_left > 0 and est_time_left < (interval_minutes * 60 * 2):
+                                    # Show estimated countdown
+                                    est_minutes = int(est_time_left // 60)
+                                    est_seconds = int(est_time_left % 60)
+                                    
+                                    # Color coding
+                                    if est_minutes == 0 and est_seconds < 60:
+                                        color = "#ff6b6b"
+                                        emoji = "�"
+                                    elif est_minutes < 5:
+                                        color = "#ffd93d"
+                                        emoji = "🟡"
+                                    else:
+                                        color = "#51cf66"
+                                        emoji = "�"
+                                    
+                                    st.markdown(f"""
+                                    <div style="background: {color}; padding: 10px; border-radius: 8px; text-align: center;">
+                                        <p style="color: white; font-weight: bold; margin: 0; font-size: 16px;">
+                                            {emoji} Next in ~{est_minutes}m {est_seconds}s
+                                        </p>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    
+                                    interval_seconds = interval_minutes * 60
+                                    progress = 1 - (est_time_left / interval_seconds)
+                                    st.progress(max(0, min(1, progress)))
+                                    st.caption(f"📅 Estimated: {estimated_next.strftime('%H:%M:%S')}")
+                                    st.caption(f"ℹ️ Based on {interval_minutes} min interval")
+                                else:
+                                    # Estimation doesn't look right, just show active
+                                    st.markdown("""
+                                    <div style="background: #51cf66; padding: 10px; border-radius: 8px; text-align: center;">
+                                        <p style="color: white; font-weight: bold; margin: 0; font-size: 16px;">
+                                            ✅ Scheduler is active
+                                        </p>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    st.caption(f"⏰ Last run: {last_run_time.strftime('%H:%M:%S')}")
+                            except Exception as e:
+                                # Fallback to generic message
+                                st.markdown("""
+                                <div style="background: #51cf66; padding: 10px; border-radius: 8px; text-align: center;">
+                                    <p style="color: white; font-weight: bold; margin: 0; font-size: 16px;">
+                                        ✅ Scheduler is running
+                                    </p>
+                                </div>
+                                """, unsafe_allow_html=True)
+                        else:
+                            # No last_run info, just show active
+                            st.markdown("""
+                            <div style="background: #51cf66; padding: 10px; border-radius: 8px; text-align: center;">
+                                <p style="color: white; font-weight: bold; margin: 0; font-size: 16px;">
+                                    ✅ Scheduler is active
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        st.caption("💡 Press 🔄 Refresh to see updated countdown")
+                    
+                    # Normal countdown (time_left > 0)
+                    else:
                         minutes_left = int(time_left // 60)
                         seconds_left = int(time_left % 60)
                         
                         # Colorful countdown display
-                        if minutes_left == 0 and seconds_left < 30:
+                        if minutes_left == 0 and seconds_left < 60:
                             color = "#ff6b6b"  # Red - almost time
                             emoji = "🔴"
                         elif minutes_left < 2:
@@ -1019,23 +1204,16 @@ def main():
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # Progress bar (use configured interval)
-                        interval_seconds = current_config.get('interval_minutes', 30) * 60
+                        # Progress bar
+                        interval_seconds = interval_minutes * 60
                         progress = 1 - (time_left / interval_seconds)
                         st.progress(max(0, min(1, progress)))
                         
-                        # Show next run time
                         st.caption(f"📅 Next run at: {next_time.strftime('%H:%M:%S')}")
-                    else:
-                        st.markdown("""
-                        <div style="background: #845ef7; padding: 10px; border-radius: 8px; text-align: center; animation: pulse 2s infinite;">
-                            <p style="color: white; font-weight: bold; margin: 0; font-size: 16px;">
-                                ⏰ Collection in progress...
-                            </p>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.caption("💡 Press 🔄 Refresh to update countdown")
+                
                 except Exception as e:
-                    st.caption(f"⚠️ Error parsing next run time: {str(e)}")
+                    st.caption(f"⚠️ Error calculating countdown: {str(e)}")
             
             # Show recent logs with color coding
             st.markdown("**📝 Recent Activity:**")
@@ -1092,27 +1270,22 @@ def main():
             else:
                 st.caption("No activity yet")
             
-            # Info box
+            # Info box with improved information
             st.info("""
 **💡 Background Scheduler:**
-- ✓ Runs independently (doesn't need dashboard open)
-- ✓ Collects reviews every 30 minutes
+- ✓ Runs independently in background
+- ✓ Auto-collects reviews at set intervals
 - ✓ Saves to database automatically
-- ✓ View logs to see what's happening
+- ✓ Live countdown updates without page refresh
+- ✓ View logs to monitor activity
             """)
-        
-        # Manual refresh button
-        if st.button("🔄 Refresh Now", key="update_scheduler", help="Manually refresh scheduler status", use_container_width=True):
-            st.rerun()
-        
-        # Auto-refresh status (caption only)
-        if auto_refresh and is_running:
-            st.caption("🔄 Auto-refresh enabled (updates every 3 seconds)")
+        else:
+            st.info("� Start the scheduler to enable automatic review collection")
         
         st.markdown("---")
         
-        # Refresh database
-        if st.button("🔄 Refresh Data"):
+        # Refresh database button
+        if st.button("🔄 Refresh Data", use_container_width=True):
             st.rerun()
     
     # Main content
@@ -2016,27 +2189,6 @@ Custom Instructions: {'Yes' if custom_prompt else 'No'}
         else:
             st.warning("⚠️ No text reviews available for the selected filters. Please adjust your selection.")
             st.info("💡 Try selecting 'All' for business and time period to see all available reviews.")
-    
-    # ⚡ AUTO-REFRESH MECHANISM (at the end, after all content is rendered)
-    # This ensures the page refreshes AFTER displaying all content, not before
-    if 'auto_refresh' in st.session_state:
-        auto_refresh_enabled = st.session_state.auto_refresh
-        
-        # Check scheduler status
-        scheduler_status = {}
-        if os.path.exists('scheduler_status.json'):
-            try:
-                with open('scheduler_status.json', 'r') as f:
-                    scheduler_status = json.load(f)
-            except:
-                pass
-        
-        is_running = scheduler_status.get('active', False)
-        
-        # Auto-refresh only if enabled and scheduler is running
-        if auto_refresh_enabled and is_running:
-            time.sleep(3)
-            st.rerun()
 
 if __name__ == "__main__":
     main()
