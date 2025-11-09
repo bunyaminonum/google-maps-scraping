@@ -1,0 +1,84 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.eggs
+.pytest_cache
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation (build these separately if needed)
+*.md
+!README.md
+
+# Test files (but keep database_test.py as it's the main database module)
+test_*.py
+# *_test.py  # Commented out - database_test.py is needed!
+tests/
+
+# Archived data and scripts
+archived_data/
+archived_scripts/
+html_samples/
+
+# Local development files
+*.log
+*.sqlite
+.env.local
+.env.development
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+tmp/
+temp/
+
+# Docker files (don't copy into image)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Jupyter Notebooks (if any)
+.ipynb_checkpoints
+*.ipynb
+
+# OS files
+Thumbs.db
+.DS_Store

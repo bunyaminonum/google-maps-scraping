@@ -1,0 +1,67 @@
+services:
+  # Main Streamlit Dashboard Application
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: google-maps-dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      # Persist database
+      - ./reviews.db:/app/reviews.db
+      # Persist scheduler status
+      - ./scheduler_status.json:/app/scheduler_status.json
+      - ./scheduler_config.json:/app/scheduler_config.json
+      # Mount .env for API keys
+      - ./.env:/app/.env:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8501/_stcore/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
+    labels:
+      - "com.google-maps-scraping.description=Streamlit Dashboard for Google Maps Reviews"
+      - "com.google-maps-scraping.version=1.0"
+
+  # Optional: Standalone Scheduler (if you want separate scheduler process)
+  # Uncomment if you want scheduler running independently
+  # scheduler:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: google-maps-scheduler
+  #   volumes:
+  #     - ./reviews.db:/app/reviews.db
+  #     - ./scheduler_status.json:/app/scheduler_status.json
+  #     - ./scheduler_config.json:/app/scheduler_config.json
+  #     - ./.env:/app/.env:ro
+  #   command: ["python", "run_scheduler_standalone.py"]
+  #   environment:
+  #     - PYTHONUNBUFFERED=1
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - dashboard
+  #   networks:
+  #     - app-network
+  #   labels:
+  #     - "com.google-maps-scraping.description=Background Scheduler for Review Collection"
+
+networks:
+  app-network:
+    driver: bridge
+
+# Optional: Add volume for better data persistence
+# volumes:
+#   dashboard-data:
+#     driver: local

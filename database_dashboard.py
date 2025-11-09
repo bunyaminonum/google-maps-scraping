@@ -944,6 +944,31 @@ def main():
         scheduler = BackgroundScheduler()
         current_config = scheduler.get_config()
         
+        # 🔄 AUTO-RECOVERY: Check if scheduler should be running but isn't
+        # This handles container restarts where the thread is lost but status says "active"
+        if scheduler_status.get('active', False):
+            # Check if scheduler is actually running by looking at last run time
+            try:
+                last_run = scheduler_status.get('last_run')
+                if last_run:
+                    last_run_time = datetime.fromisoformat(last_run)
+                    now = datetime.now()
+                    time_since_last = (now - last_run_time).total_seconds() / 60  # minutes
+                    
+                    interval_minutes = current_config.get('interval_minutes', 30)
+                    
+                    # If no collection in 2x interval time, scheduler probably crashed
+                    if time_since_last > (interval_minutes * 2):
+                        # Try to restart scheduler
+                        if 'scheduler_auto_restarted' not in st.session_state:
+                            st.session_state['scheduler_auto_restarted'] = True
+                            if scheduler.start():
+                                st.success(f"🔄 Scheduler auto-restarted after container restart")
+                                time.sleep(1)
+                                st.rerun()
+            except Exception as e:
+                pass  # Silently ignore auto-recovery errors
+        
         # ⚙️ Configuration Section
         with st.expander("⚙️ Scheduler Settings", expanded=not scheduler_status.get('active', False)):
             st.markdown("**Configure Collection Behavior:**")
