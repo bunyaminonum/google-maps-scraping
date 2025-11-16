@@ -36,7 +36,6 @@ COPY --from=builder /install /usr/local
 COPY database_dashboard.py .
 COPY database_test.py .
 COPY background_scheduler.py .
-COPY turkish_time_parser.py .
 COPY run_scheduler_standalone.py .
 COPY run_scheduler.bat .
 COPY api_pipeline/ ./api_pipeline/

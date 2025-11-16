@@ -23,6 +23,15 @@ import os
 import time
 from dotenv import load_dotenv
 
+# Folium for maps (conditional)
+FOLIUM_AVAILABLE = False
+try:
+    import folium
+    from streamlit_folium import st_folium
+    FOLIUM_AVAILABLE = True
+except ImportError:
+    pass
+
 # Gemini AI import (conditional - only if needed)
 GEMINI_AVAILABLE = False
 try:
@@ -869,6 +878,7 @@ def main():
                     # Trigger collection
                     with st.spinner(f"Collecting reviews from {bname}..."):
                         try:
+                            from api_pipeline.collectors.google_maps_api import GoogleMapsAPICollector
                             load_dotenv()
                             api_key = os.getenv('GOOGLE_MAPS_API_KEY')
                             if api_key:
@@ -1512,7 +1522,7 @@ Get-Process python | Where-Object {$_.CommandLine -like "*run_scheduler_standalo
     st.markdown("---")
     
     # Tab structure
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Overview", "📈 Time Analysis", "💬 Review Details", "☁️ WordCloud", "🤖 AI Analysis"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Overview", "📈 Time Analysis", "💬 Review Details", "☁️ WordCloud", "🤖 AI Analysis", "🗺️ Map View"])
     
     with tab1:
         st.markdown("## 📊 Overview")
@@ -2345,6 +2355,183 @@ Custom Instructions: {'Yes' if custom_prompt else 'No'}
         else:
             st.warning("⚠️ No text reviews available for the selected filters. Please adjust your selection.")
             st.info("💡 Try selecting 'All' for business and time period to see all available reviews.")
+    
+    # ==================== MAP VIEW TAB ====================
+    with tab6:
+        st.markdown("## 🗺️ Business Locations Map")
+        
+        if not FOLIUM_AVAILABLE:
+            st.error("❌ Folium not installed. Please install: `pip install folium streamlit-folium`")
+            st.info("Or run: `docker-compose up -d --build` to rebuild with map support")
+            st.stop()
+        
+        # Get all businesses with location data
+        conn = sqlite3.connect(db.db_path)
+        businesses_df = pd.read_sql_query("""
+            SELECT 
+                id, name, place_id, address, latitude, longitude, enabled,
+                (SELECT COUNT(*) FROM reviews WHERE business_name = businesses.name) as review_count
+            FROM businesses
+            ORDER BY name
+        """, conn)
+        conn.close()
+        
+        # Business filter for map
+        col1, col2, col3 = st.columns([2, 2, 1])
+        
+        with col1:
+            map_business_filter = st.selectbox(
+                "Select Business(es)",
+                options=['All Businesses'] + businesses_df['name'].tolist(),
+                key='map_business_filter'
+            )
+        
+        with col2:
+            show_disabled = st.checkbox(
+                "Show Disabled Businesses",
+                value=False,
+                key='show_disabled'
+            )
+        
+        with col3:
+            if st.button("🔄 Update Locations", use_container_width=True):
+                with st.spinner("Fetching location data from Google Maps API..."):
+                    from api_pipeline.collectors.google_maps_api import GoogleMapsAPICollector
+                    from api_pipeline.config.settings import Config
+                    
+                    collector = GoogleMapsAPICollector(Config.GOOGLE_MAPS_API_KEY)
+                    
+                    # Update locations for businesses without coordinates
+                    businesses_to_update = businesses_df[
+                        businesses_df['latitude'].isna() | businesses_df['longitude'].isna()
+                    ]
+                    
+                    if len(businesses_to_update) > 0:
+                        updated_count = 0
+                        conn = sqlite3.connect(db.db_path)
+                        cursor = conn.cursor()
+                        
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        
+                        for counter, (idx, row) in enumerate(businesses_to_update.iterrows(), 1):
+                            status_text.text(f"Updating {row['name']}...")
+                            progress_bar.progress(counter / len(businesses_to_update))
+                            
+                            details = collector.get_place_details(row['place_id'])
+                            
+                            if details['success']:
+                                cursor.execute("""
+                                    UPDATE businesses 
+                                    SET address = ?, latitude = ?, longitude = ?
+                                    WHERE id = ?
+                                """, (details['address'], details['latitude'], details['longitude'], row['id']))
+                                updated_count += 1
+                            
+                            time.sleep(0.5)  # Rate limiting
+                        
+                        conn.commit()
+                        conn.close()
+                        
+                        progress_bar.empty()
+                        status_text.empty()
+                        
+                        st.success(f"✅ Updated {updated_count} business locations!")
+                        st.rerun()
+                    else:
+                        st.info("✅ All businesses already have location data!")
+        
+        # Filter businesses
+        filtered_businesses = businesses_df.copy()
+        
+        if map_business_filter != 'All Businesses':
+            filtered_businesses = filtered_businesses[filtered_businesses['name'] == map_business_filter]
+        
+        if not show_disabled:
+            filtered_businesses = filtered_businesses[filtered_businesses['enabled'] == 1]
+        
+        # Remove businesses without coordinates
+        map_businesses = filtered_businesses[
+            filtered_businesses['latitude'].notna() & 
+            filtered_businesses['longitude'].notna()
+        ]
+        
+        if len(map_businesses) == 0:
+            st.warning("⚠️ No businesses with location data found. Click 'Update Locations' to fetch coordinates from Google Maps API.")
+        else:
+            # Calculate center of map
+            center_lat = map_businesses['latitude'].mean()
+            center_lon = map_businesses['longitude'].mean()
+            
+            # Create map
+            m = folium.Map(
+                location=[center_lat, center_lon],
+                zoom_start=12 if map_business_filter != 'All Businesses' else 6,
+                tiles='OpenStreetMap'
+            )
+            
+            # Add markers for each business
+            for _, business in map_businesses.iterrows():
+                # Marker color based on review count
+                if business['review_count'] > 100:
+                    color = 'green'
+                elif business['review_count'] > 50:
+                    color = 'blue'
+                elif business['review_count'] > 0:
+                    color = 'orange'
+                else:
+                    color = 'gray'
+                
+                # Create popup content
+                popup_html = f"""
+                <div style="font-family: Arial; min-width: 200px;">
+                    <h4 style="margin: 0 0 10px 0; color: #1f77b4;">{business['name']}</h4>
+                    <p style="margin: 5px 0;"><b>📍 Address:</b><br>{business['address'] if pd.notna(business['address']) else 'N/A'}</p>
+                    <p style="margin: 5px 0;"><b>⭐ Reviews:</b> {business['review_count']}</p>
+                    <p style="margin: 5px 0;"><b>🔗 Place ID:</b><br><small>{business['place_id']}</small></p>
+                    <p style="margin: 5px 0;"><b>📊 Status:</b> {'✅ Active' if business['enabled'] else '❌ Disabled'}</p>
+                </div>
+                """
+                
+                folium.Marker(
+                    location=[business['latitude'], business['longitude']],
+                    popup=folium.Popup(popup_html, max_width=300),
+                    tooltip=f"{business['name']} ({business['review_count']} reviews)",
+                    icon=folium.Icon(color=color, icon='info-sign')
+                ).add_to(m)
+            
+            # Display map
+            st_folium(m, width=1200, height=600)
+            
+            # Statistics
+            st.markdown("---")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("📍 Locations on Map", len(map_businesses))
+            
+            with col2:
+                st.metric("⭐ Total Reviews", map_businesses['review_count'].sum())
+            
+            with col3:
+                st.metric("🟢 Active Businesses", len(map_businesses[map_businesses['enabled'] == 1]))
+            
+            with col4:
+                avg_reviews = map_businesses['review_count'].mean()
+                st.metric("📊 Avg Reviews/Location", f"{avg_reviews:.1f}")
+            
+            # Business list with addresses
+            st.markdown("### 📋 Business Details")
+            
+            display_df = map_businesses[['name', 'address', 'review_count', 'enabled']].copy()
+            display_df.columns = ['Business Name', 'Address', 'Review Count', 'Active']
+            display_df['Active'] = display_df['Active'].map({1: '✅', 0: '❌'})
+            
+            st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True
+            )
 
 if __name__ == "__main__":
     main()

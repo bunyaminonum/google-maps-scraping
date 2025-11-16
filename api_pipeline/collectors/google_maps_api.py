@@ -236,6 +236,65 @@ class GoogleMapsAPICollector:
             'last_request': self.last_request_time,
             'language': self.language
         }
+    
+    def get_place_details(self, place_id: str) -> Dict:
+        """
+        Get place details including location coordinates
+        
+        Args:
+            place_id: Google Maps Place ID
+            
+        Returns:
+            Dictionary with:
+                - success: bool
+                - name: str
+                - address: str
+                - latitude: float
+                - longitude: float
+                - error: str (if failed)
+        """
+        params = {
+            'place_id': place_id,
+            'key': self.api_key,
+            'fields': 'name,formatted_address,geometry',
+            'language': self.language
+        }
+        
+        try:
+            response = requests.get(self.BASE_URL, params=params, timeout=10)
+            self.request_count += 1
+            self.last_request_time = time.time()
+            
+            if response.status_code != 200:
+                return {
+                    'success': False,
+                    'error': f'HTTP {response.status_code}'
+                }
+            
+            data = response.json()
+            
+            if data.get('status') != 'OK':
+                return {
+                    'success': False,
+                    'error': data.get('status', 'UNKNOWN_ERROR')
+                }
+            
+            result = data.get('result', {})
+            location = result.get('geometry', {}).get('location', {})
+            
+            return {
+                'success': True,
+                'name': result.get('name', ''),
+                'address': result.get('formatted_address', ''),
+                'latitude': location.get('lat'),
+                'longitude': location.get('lng')
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
 
 
 # Test function

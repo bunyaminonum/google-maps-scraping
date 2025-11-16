@@ -1,264 +1,264 @@
 {
   "active": true,
-  "last_run": "2025-11-09T18:25:55.545225",
-  "next_run": "2025-11-09T20:25:55.545225",
-  "total_collections": 77,
+  "last_run": "2025-11-16T20:13:11.162405",
+  "next_run": "2025-11-16T22:13:11.162405",
+  "total_collections": 92,
   "last_result": {
     "success": true,
-    "new_reviews": 4,
-    "duplicates": 6,
-    "timestamp": "2025-11-09T18:25:55.545195"
+    "new_reviews": 0,
+    "duplicates": 10,
+    "timestamp": "2025-11-16T20:13:11.162367"
   },
   "logs": [
     {
-      "timestamp": "2025-11-09T09:39:39.908735",
-      "level": "success",
-      "message": "  \u2705 Sabiha Gokcen Airport: 1 new, 4 duplicates"
-    },
-    {
-      "timestamp": "2025-11-09T09:39:39.911983",
-      "level": "info",
-      "message": "\ud83d\udccd Collecting: \u0130stanbul Havaliman\u0131 (Place ID: ChIJqZW8Cvb_n0ARBuUk...)"
-    },
-    {
-      "timestamp": "2025-11-09T09:39:40.580975",
-      "level": "info",
-      "message": "  \ud83d\udce5 Received 5 reviews from API"
-    },
-    {
-      "timestamp": "2025-11-09T09:39:40.600831",
-      "level": "success",
-      "message": "  \u2705 \u0130stanbul Havaliman\u0131: 0 new, 5 duplicates"
-    },
-    {
-      "timestamp": "2025-11-09T09:39:40.614333",
-      "level": "success",
-      "message": "\u2705 Collection successful! New: 1, Duplicates: 9"
-    },
-    {
-      "timestamp": "2025-11-09T09:54:42.065868",
-      "level": "info",
-      "message": "\u23f0 Starting scheduled collection (Run #73)"
-    },
-    {
-      "timestamp": "2025-11-09T09:54:42.101226",
-      "level": "info",
-      "message": "\ud83d\udccb Collecting from 2 selected businesses"
-    },
-    {
-      "timestamp": "2025-11-09T09:54:42.103543",
+      "timestamp": "2025-11-14T08:30:28.562210",
       "level": "info",
       "message": "\ud83d\udccd Collecting: Sabiha Gokcen Airport (Place ID: ChIJU6Ek9MvbyhQRdNqY...)"
     },
     {
-      "timestamp": "2025-11-09T09:54:42.918914",
+      "timestamp": "2025-11-14T08:30:29.007740",
       "level": "info",
       "message": "  \ud83d\udce5 Received 5 reviews from API"
     },
     {
-      "timestamp": "2025-11-09T09:54:42.941626",
-      "level": "success",
-      "message": "  \u2705 Sabiha Gokcen Airport: 0 new, 5 duplicates"
-    },
-    {
-      "timestamp": "2025-11-09T09:54:42.943830",
-      "level": "info",
-      "message": "\ud83d\udccd Collecting: \u0130stanbul Havaliman\u0131 (Place ID: ChIJqZW8Cvb_n0ARBuUk...)"
-    },
-    {
-      "timestamp": "2025-11-09T09:54:44.044142",
-      "level": "info",
-      "message": "  \ud83d\udce5 Received 5 reviews from API"
-    },
-    {
-      "timestamp": "2025-11-09T09:54:44.086682",
-      "level": "success",
-      "message": "  \u2705 \u0130stanbul Havaliman\u0131: 1 new, 4 duplicates"
-    },
-    {
-      "timestamp": "2025-11-09T09:54:44.099821",
-      "level": "success",
-      "message": "\u2705 Collection successful! New: 1, Duplicates: 9"
-    },
-    {
-      "timestamp": "2025-11-09T16:11:45.452862",
-      "level": "info",
-      "message": "\u23f0 Starting scheduled collection (Run #74)"
-    },
-    {
-      "timestamp": "2025-11-09T16:11:45.526179",
-      "level": "info",
-      "message": "\ud83d\udccb Collecting from 2 selected businesses"
-    },
-    {
-      "timestamp": "2025-11-09T16:11:45.530385",
-      "level": "info",
-      "message": "\ud83d\udccd Collecting: Sabiha Gokcen Airport (Place ID: ChIJU6Ek9MvbyhQRdNqY...)"
-    },
-    {
-      "timestamp": "2025-11-09T16:11:46.157088",
-      "level": "info",
-      "message": "  \ud83d\udce5 Received 5 reviews from API"
-    },
-    {
-      "timestamp": "2025-11-09T16:11:46.373209",
+      "timestamp": "2025-11-14T08:30:29.119366",
       "level": "success",
       "message": "  \u2705 Sabiha Gokcen Airport: 5 new, 0 duplicates"
     },
     {
-      "timestamp": "2025-11-09T16:11:46.377283",
+      "timestamp": "2025-11-14T08:30:29.122745",
       "level": "info",
       "message": "\ud83d\udccd Collecting: \u0130stanbul Havaliman\u0131 (Place ID: ChIJqZW8Cvb_n0ARBuUk...)"
     },
     {
-      "timestamp": "2025-11-09T16:11:46.983647",
+      "timestamp": "2025-11-14T08:30:29.489897",
       "level": "info",
       "message": "  \ud83d\udce5 Received 5 reviews from API"
     },
     {
-      "timestamp": "2025-11-09T16:11:47.142637",
+      "timestamp": "2025-11-14T08:30:29.582841",
       "level": "success",
       "message": "  \u2705 \u0130stanbul Havaliman\u0131: 5 new, 0 duplicates"
     },
     {
-      "timestamp": "2025-11-09T16:11:47.161579",
+      "timestamp": "2025-11-14T08:30:29.597177",
       "level": "success",
       "message": "\u2705 Collection successful! New: 10, Duplicates: 0"
     },
     {
-      "timestamp": "2025-11-09T16:26:46.470498",
+      "timestamp": "2025-11-16T13:24:29.623827",
       "level": "info",
-      "message": "\u23f0 Starting scheduled collection (Run #75)"
+      "message": "\ud83d\ude80 Background scheduler started at 2025-11-16 13:24:29"
     },
     {
-      "timestamp": "2025-11-09T16:26:46.525118",
+      "timestamp": "2025-11-16T13:24:29.644669",
+      "level": "info",
+      "message": "\u23f0 Starting scheduled collection (Run #89)"
+    },
+    {
+      "timestamp": "2025-11-16T13:24:29.686733",
       "level": "info",
       "message": "\ud83d\udccb Collecting from 2 selected businesses"
     },
     {
-      "timestamp": "2025-11-09T16:26:46.527346",
+      "timestamp": "2025-11-16T13:24:29.691576",
       "level": "info",
       "message": "\ud83d\udccd Collecting: Sabiha Gokcen Airport (Place ID: ChIJU6Ek9MvbyhQRdNqY...)"
     },
     {
-      "timestamp": "2025-11-09T16:26:47.222268",
+      "timestamp": "2025-11-16T13:24:30.130821",
+      "level": "success",
+      "message": "\u2705 Scheduler started (interval: 120 min)"
+    },
+    {
+      "timestamp": "2025-11-16T13:24:30.300537",
       "level": "info",
       "message": "  \ud83d\udce5 Received 5 reviews from API"
     },
     {
-      "timestamp": "2025-11-09T16:26:47.298406",
+      "timestamp": "2025-11-16T13:24:30.438894",
       "level": "success",
-      "message": "  \u2705 Sabiha Gokcen Airport: 0 new, 5 duplicates"
+      "message": "  \u2705 Sabiha Gokcen Airport: 5 new, 0 duplicates"
     },
     {
-      "timestamp": "2025-11-09T16:26:47.303765",
+      "timestamp": "2025-11-16T13:24:30.440817",
       "level": "info",
       "message": "\ud83d\udccd Collecting: \u0130stanbul Havaliman\u0131 (Place ID: ChIJqZW8Cvb_n0ARBuUk...)"
     },
     {
-      "timestamp": "2025-11-09T16:26:47.942629",
+      "timestamp": "2025-11-16T13:24:30.951193",
       "level": "info",
       "message": "  \ud83d\udce5 Received 5 reviews from API"
     },
     {
-      "timestamp": "2025-11-09T16:26:47.994029",
+      "timestamp": "2025-11-16T13:24:31.051323",
+      "level": "success",
+      "message": "  \u2705 \u0130stanbul Havaliman\u0131: 5 new, 0 duplicates"
+    },
+    {
+      "timestamp": "2025-11-16T13:24:31.064039",
+      "level": "success",
+      "message": "\u2705 Collection successful! New: 10, Duplicates: 0"
+    },
+    {
+      "timestamp": "2025-11-16T15:20:56.499909",
+      "level": "info",
+      "message": "\u23f0 Starting scheduled collection (Run #90)"
+    },
+    {
+      "timestamp": "2025-11-16T15:20:56.609001",
+      "level": "info",
+      "message": "\ud83d\udccb Collecting from 2 selected businesses"
+    },
+    {
+      "timestamp": "2025-11-16T15:20:56.611357",
+      "level": "info",
+      "message": "\ud83d\udccd Collecting: Sabiha Gokcen Airport (Place ID: ChIJU6Ek9MvbyhQRdNqY...)"
+    },
+    {
+      "timestamp": "2025-11-16T15:20:57.163905",
+      "level": "info",
+      "message": "  \ud83d\udce5 Received 5 reviews from API"
+    },
+    {
+      "timestamp": "2025-11-16T15:20:57.201642",
+      "level": "success",
+      "message": "  \u2705 Sabiha Gokcen Airport: 1 new, 4 duplicates"
+    },
+    {
+      "timestamp": "2025-11-16T15:20:57.203459",
+      "level": "info",
+      "message": "\ud83d\udccd Collecting: \u0130stanbul Havaliman\u0131 (Place ID: ChIJqZW8Cvb_n0ARBuUk...)"
+    },
+    {
+      "timestamp": "2025-11-16T15:20:57.531802",
+      "level": "info",
+      "message": "  \ud83d\udce5 Received 5 reviews from API"
+    },
+    {
+      "timestamp": "2025-11-16T15:20:57.625014",
+      "level": "success",
+      "message": "  \u2705 \u0130stanbul Havaliman\u0131: 4 new, 1 duplicates"
+    },
+    {
+      "timestamp": "2025-11-16T15:20:57.638535",
+      "level": "success",
+      "message": "\u2705 Collection successful! New: 5, Duplicates: 5"
+    },
+    {
+      "timestamp": "2025-11-16T20:10:53.434311",
+      "level": "info",
+      "message": "\ud83d\ude80 Background scheduler started at 2025-11-16 20:10:53"
+    },
+    {
+      "timestamp": "2025-11-16T20:10:53.450050",
+      "level": "info",
+      "message": "\u23f0 Starting scheduled collection (Run #91)"
+    },
+    {
+      "timestamp": "2025-11-16T20:10:53.522297",
+      "level": "info",
+      "message": "\ud83d\udccb Collecting from 2 selected businesses"
+    },
+    {
+      "timestamp": "2025-11-16T20:10:53.525027",
+      "level": "info",
+      "message": "\ud83d\udccd Collecting: Sabiha Gokcen Airport (Place ID: ChIJU6Ek9MvbyhQRdNqY...)"
+    },
+    {
+      "timestamp": "2025-11-16T20:10:53.934769",
+      "level": "success",
+      "message": "\u2705 Scheduler started (interval: 120 min)"
+    },
+    {
+      "timestamp": "2025-11-16T20:10:54.402083",
+      "level": "info",
+      "message": "  \ud83d\udce5 Received 5 reviews from API"
+    },
+    {
+      "timestamp": "2025-11-16T20:10:54.537928",
+      "level": "success",
+      "message": "  \u2705 Sabiha Gokcen Airport: 4 new, 1 duplicates"
+    },
+    {
+      "timestamp": "2025-11-16T20:10:54.540589",
+      "level": "info",
+      "message": "\ud83d\udccd Collecting: \u0130stanbul Havaliman\u0131 (Place ID: ChIJqZW8Cvb_n0ARBuUk...)"
+    },
+    {
+      "timestamp": "2025-11-16T20:10:56.252368",
+      "level": "info",
+      "message": "  \ud83d\udce5 Received 5 reviews from API"
+    },
+    {
+      "timestamp": "2025-11-16T20:10:56.427892",
+      "level": "success",
+      "message": "  \u2705 \u0130stanbul Havaliman\u0131: 5 new, 0 duplicates"
+    },
+    {
+      "timestamp": "2025-11-16T20:10:56.461749",
+      "level": "success",
+      "message": "\u2705 Collection successful! New: 9, Duplicates: 1"
+    },
+    {
+      "timestamp": "2025-11-16T20:13:00.554699",
+      "level": "info",
+      "message": "\u23f9\ufe0f Scheduler stopped (was not running)"
+    },
+    {
+      "timestamp": "2025-11-16T20:13:10.449673",
+      "level": "info",
+      "message": "\ud83d\ude80 Background scheduler started at 2025-11-16 20:13:10"
+    },
+    {
+      "timestamp": "2025-11-16T20:13:10.500560",
+      "level": "info",
+      "message": "\u23f0 Starting scheduled collection (Run #92)"
+    },
+    {
+      "timestamp": "2025-11-16T20:13:10.643965",
+      "level": "info",
+      "message": "\ud83d\udccb Collecting from 2 selected businesses"
+    },
+    {
+      "timestamp": "2025-11-16T20:13:10.649080",
+      "level": "info",
+      "message": "\ud83d\udccd Collecting: Sabiha Gokcen Airport (Place ID: ChIJU6Ek9MvbyhQRdNqY...)"
+    },
+    {
+      "timestamp": "2025-11-16T20:13:10.872515",
+      "level": "info",
+      "message": "  \ud83d\udce5 Received 5 reviews from API"
+    },
+    {
+      "timestamp": "2025-11-16T20:13:10.912116",
+      "level": "success",
+      "message": "  \u2705 Sabiha Gokcen Airport: 0 new, 5 duplicates"
+    },
+    {
+      "timestamp": "2025-11-16T20:13:10.916356",
+      "level": "info",
+      "message": "\ud83d\udccd Collecting: \u0130stanbul Havaliman\u0131 (Place ID: ChIJqZW8Cvb_n0ARBuUk...)"
+    },
+    {
+      "timestamp": "2025-11-16T20:13:10.949840",
+      "level": "success",
+      "message": "\u2705 Scheduler started (interval: 120 min)"
+    },
+    {
+      "timestamp": "2025-11-16T20:13:11.123513",
+      "level": "info",
+      "message": "  \ud83d\udce5 Received 5 reviews from API"
+    },
+    {
+      "timestamp": "2025-11-16T20:13:11.158939",
       "level": "success",
       "message": "  \u2705 \u0130stanbul Havaliman\u0131: 0 new, 5 duplicates"
     },
     {
-      "timestamp": "2025-11-09T16:26:48.011022",
+      "timestamp": "2025-11-16T20:13:11.186194",
       "level": "success",
       "message": "\u2705 Collection successful! New: 0, Duplicates: 10"
-    },
-    {
-      "timestamp": "2025-11-09T16:41:46.188642",
-      "level": "info",
-      "message": "\u23f0 Starting scheduled collection (Run #76)"
-    },
-    {
-      "timestamp": "2025-11-09T16:41:46.271593",
-      "level": "info",
-      "message": "\ud83d\udccb Collecting from 2 selected businesses"
-    },
-    {
-      "timestamp": "2025-11-09T16:41:46.276095",
-      "level": "info",
-      "message": "\ud83d\udccd Collecting: Sabiha Gokcen Airport (Place ID: ChIJU6Ek9MvbyhQRdNqY...)"
-    },
-    {
-      "timestamp": "2025-11-09T16:41:48.231343",
-      "level": "info",
-      "message": "  \ud83d\udce5 Received 5 reviews from API"
-    },
-    {
-      "timestamp": "2025-11-09T16:41:48.272170",
-      "level": "success",
-      "message": "  \u2705 Sabiha Gokcen Airport: 0 new, 5 duplicates"
-    },
-    {
-      "timestamp": "2025-11-09T16:41:48.275332",
-      "level": "info",
-      "message": "\ud83d\udccd Collecting: \u0130stanbul Havaliman\u0131 (Place ID: ChIJqZW8Cvb_n0ARBuUk...)"
-    },
-    {
-      "timestamp": "2025-11-09T16:41:50.583062",
-      "level": "info",
-      "message": "  \ud83d\udce5 Received 5 reviews from API"
-    },
-    {
-      "timestamp": "2025-11-09T16:41:50.649874",
-      "level": "success",
-      "message": "  \u2705 \u0130stanbul Havaliman\u0131: 1 new, 4 duplicates"
-    },
-    {
-      "timestamp": "2025-11-09T16:41:50.663944",
-      "level": "success",
-      "message": "\u2705 Collection successful! New: 1, Duplicates: 9"
-    },
-    {
-      "timestamp": "2025-11-09T18:25:54.400182",
-      "level": "info",
-      "message": "\u23f0 Starting scheduled collection (Run #77)"
-    },
-    {
-      "timestamp": "2025-11-09T18:25:54.458150",
-      "level": "info",
-      "message": "\ud83d\udccb Collecting from 2 selected businesses"
-    },
-    {
-      "timestamp": "2025-11-09T18:25:54.460073",
-      "level": "info",
-      "message": "\ud83d\udccd Collecting: Sabiha Gokcen Airport (Place ID: ChIJU6Ek9MvbyhQRdNqY...)"
-    },
-    {
-      "timestamp": "2025-11-09T18:25:55.044443",
-      "level": "info",
-      "message": "  \ud83d\udce5 Received 5 reviews from API"
-    },
-    {
-      "timestamp": "2025-11-09T18:25:55.136140",
-      "level": "success",
-      "message": "  \u2705 Sabiha Gokcen Airport: 2 new, 3 duplicates"
-    },
-    {
-      "timestamp": "2025-11-09T18:25:55.138843",
-      "level": "info",
-      "message": "\ud83d\udccd Collecting: \u0130stanbul Havaliman\u0131 (Place ID: ChIJqZW8Cvb_n0ARBuUk...)"
-    },
-    {
-      "timestamp": "2025-11-09T18:25:55.451748",
-      "level": "info",
-      "message": "  \ud83d\udce5 Received 5 reviews from API"
-    },
-    {
-      "timestamp": "2025-11-09T18:25:55.541471",
-      "level": "success",
-      "message": "  \u2705 \u0130stanbul Havaliman\u0131: 2 new, 3 duplicates"
-    },
-    {
-      "timestamp": "2025-11-09T18:25:55.558608",
-      "level": "success",
-      "message": "\u2705 Collection successful! New: 4, Duplicates: 6"
     }
   ]
 }

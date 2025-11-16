@@ -102,6 +102,9 @@ class ReviewsDatabase:
             name TEXT NOT NULL UNIQUE,
             place_id TEXT NOT NULL,
             enabled INTEGER DEFAULT 1,
+            address TEXT,
+            latitude REAL,
+            longitude REAL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -123,6 +126,7 @@ class ReviewsDatabase:
         # Run migrations for existing databases
         self._migrate_add_review_hash(conn, cursor)
         self._migrate_populate_businesses(conn, cursor)
+        self._migrate_add_location_to_businesses(conn, cursor)
         
         conn.close()
         print("✅ Database tables created/verified")
@@ -219,6 +223,38 @@ class ReviewsDatabase:
             print(f"   ✅ Migration complete: {inserted_count} businesses imported")
         else:
             print(f"   ℹ️  Businesses table already populated ({count} businesses)")
+    
+    def _migrate_add_location_to_businesses(self, conn, cursor):
+        """
+        Migration: Add location columns to businesses table
+        Safe to run multiple times (checks if columns exist)
+        """
+        cursor.execute("PRAGMA table_info(businesses)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        migrations_needed = []
+        if 'address' not in columns:
+            migrations_needed.append('address')
+        if 'latitude' not in columns:
+            migrations_needed.append('latitude')
+        if 'longitude' not in columns:
+            migrations_needed.append('longitude')
+        
+        if migrations_needed:
+            print(f"🔄 Migrating database: Adding location columns to businesses table...")
+            
+            for column in migrations_needed:
+                if column == 'address':
+                    cursor.execute("ALTER TABLE businesses ADD COLUMN address TEXT")
+                elif column == 'latitude':
+                    cursor.execute("ALTER TABLE businesses ADD COLUMN latitude REAL")
+                elif column == 'longitude':
+                    cursor.execute("ALTER TABLE businesses ADD COLUMN longitude REAL")
+            
+            conn.commit()
+            print(f"   ✅ Migration complete: Added {', '.join(migrations_needed)} columns")
+        else:
+            print("   ℹ️  Location columns already exist")
     
     def save_scrape_session(self, session_data):
         """Save scrape session information"""
